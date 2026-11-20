@@ -11,24 +11,24 @@
     </div>
 
     <section :aria-labelledby="`${uid}-platforms`">
-      <h4 :id="`${uid}-platforms`" class="m-0 text-[11px] font-semibold uppercase tracking-wider text-ink-4">Share to</h4>
+      <h4 :id="`${uid}-platforms`" class="m-0 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-4">Share to</h4>
       <div class="mt-2.5 grid grid-cols-4 gap-2">
-        <a v-for="target in targets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-ctl border border-edge bg-panel-2 text-[11px] font-medium text-ink-2 no-underline transition-colors hover:border-edge-strong hover:bg-raised hover:text-ink aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="unavailable ? 'true' : null" @click="preparePlatform($event, target)"><i aria-hidden="true" class="text-lg" :class="target.icon"></i>{{ target.label }}</a>
+        <a v-for="target in targets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-ctl border border-edge bg-panel-2 text-[0.6875rem] font-medium text-ink-2 no-underline transition-colors hover:border-edge-strong hover:bg-raised hover:text-ink aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="unavailable ? 'true' : null" @click="preparePlatform($event, target)"><i aria-hidden="true" class="text-lg" :class="target.icon"></i>{{ target.label }}</a>
       </div>
       <p v-if="shareNotice" role="status" class="m-0 mt-2.5 rounded-ctl border border-brand-ink/15 bg-brand-soft/25 px-3 py-2 text-xs leading-relaxed text-brand-ink">{{ shareNotice }}</p>
-      <p v-else class="m-0 mt-2 text-[11px] leading-relaxed text-ink-4">We copy the image first, so you can paste it straight into the post.</p>
+      <p v-else class="m-0 mt-2 text-[0.6875rem] leading-relaxed text-ink-4">We copy the image first, so you can paste it straight into the post.</p>
     </section>
 
     <section>
       <div class="flex items-center justify-between gap-2">
-        <label :for="`${uid}-caption`" class="text-[11px] font-semibold uppercase tracking-wider text-ink-4">Caption</label>
+        <label :for="`${uid}-caption`" class="text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-4">Caption</label>
         <div class="-mr-2 flex items-center">
-          <button v-if="captionEdited" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-ctl border-0 bg-transparent px-2 text-xs font-medium text-ink-3 hover:bg-raised hover:text-ink" @click="captionDraft = caption"><i aria-hidden="true" class="fas fa-undo text-[10px]"></i>Reset</button>
+          <button v-if="captionEdited" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-ctl border-0 bg-transparent px-2 text-xs font-medium text-ink-3 hover:bg-raised hover:text-ink" @click="captionDraft = caption"><i aria-hidden="true" class="fas fa-undo text-[0.625rem]"></i>Reset</button>
           <button type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-ctl border-0 bg-transparent px-2 text-xs font-semibold text-brand-ink hover:bg-raised" @click="copyCaption"><i aria-hidden="true" :class="captionCopied ? 'fas fa-check' : 'far fa-copy'"></i><span aria-live="polite">{{ captionCopied ? 'Copied!' : 'Copy caption' }}</span></button>
         </div>
       </div>
-      <textarea :id="`${uid}-caption`" v-model="captionDraft" rows="4" class="ui-input mt-1.5 block h-auto resize-none py-2.5 text-[13px] leading-relaxed" :aria-describedby="`${uid}-caption-hint`"></textarea>
-      <p :id="`${uid}-caption-hint`" class="m-0 mt-1.5 text-right text-[11px] tabular-nums" :class="captionDraft.length > BLUESKY_LIMIT ? 'text-caution' : 'text-ink-4'">{{ captionDraft.length > BLUESKY_LIMIT ? 'Too long for Bluesky · ' : '' }}{{ captionDraft.length }} / {{ BLUESKY_LIMIT }}</p>
+      <textarea :id="`${uid}-caption`" v-model="captionDraft" rows="4" class="ui-input mt-1.5 block h-auto resize-none py-2.5 text-[0.8125rem] leading-relaxed" :aria-describedby="`${uid}-caption-hint`"></textarea>
+      <p :id="`${uid}-caption-hint`" class="m-0 mt-1.5 text-right text-[0.6875rem] tabular-nums" :class="captionDraft.length > BLUESKY_LIMIT ? 'text-caution' : 'text-ink-4'">{{ captionDraft.length > BLUESKY_LIMIT ? 'Too long for Bluesky · ' : '' }}{{ captionDraft.length }} / {{ BLUESKY_LIMIT }}</p>
     </section>
   </div>
 </template>

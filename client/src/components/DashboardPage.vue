@@ -13,8 +13,8 @@
       <!-- Sidebar -->
       <nav
         aria-label="Main"
-        class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex flex-col gap-6 px-3.5 py-5 bg-side border-r border-edge overflow-y-auto transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
-        :class="showMobileNav ? 'translate-x-0' : '-translate-x-full'"
+        class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex flex-col gap-6 px-3.5 py-5 bg-side border-r border-edge overflow-y-auto transition-[translate,visibility] lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+        :class="showMobileNav ? 'translate-x-0' : '-translate-x-full max-lg:invisible'"
       >
         <a
           href="https://github.com/giuseppe99barchetta/SuggestArr"
@@ -28,7 +28,7 @@
 
         <div class="flex flex-col gap-0.5" data-tour-id="nav-tabs">
           <template v-for="group in navGroups" :key="group.label">
-            <div v-if="group.label" class="px-3 pt-4 pb-1.5 text-[11px] font-bold uppercase tracking-widest text-ink-4">{{ group.label }}</div>
+            <div v-if="group.label" class="px-3 pt-4 pb-1.5 text-[0.6875rem] font-bold uppercase tracking-widest text-ink-4">{{ group.label }}</div>
             <router-link
               v-for="tab in group.tabs"
               :key="tab.id"
@@ -41,7 +41,7 @@
             >
               <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
               <span>{{ tab.name }}</span>
-              <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+              <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[0.6875rem] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
             </router-link>
           </template>
         </div>
@@ -52,15 +52,15 @@
             :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/latest`"
             target="_blank"
             rel="noopener noreferrer"
-            class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[13px] font-semibold no-underline"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[0.8125rem] font-semibold no-underline"
           >
             <i aria-hidden="true" class="fas fa-arrow-up"></i> Update available
           </a>
           <div class="flex items-center gap-2.5 p-2">
-            <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
+            <UserAvatar :user="currentUser" class="h-8 w-8 text-[2rem]" />
             <div class="flex flex-col min-w-0">
-              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
-              <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="View changelog" @click="showChangelog">
+              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[0.8125rem] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
+              <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="What's new" data-testid="open-whats-new" @click="openVersionNotes">
                 {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
             </div>
@@ -108,14 +108,14 @@
           v-for="tab in quickTabs"
           :key="tab.id"
           :to="{ name: 'DashboardTab', params: { tab: tab.id } }"
-          class="relative flex flex-col items-center gap-1 py-2 text-[11px] font-semibold no-underline"
+          class="relative flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-semibold no-underline"
           :class="activeTab === tab.id ? 'text-brand-ink' : 'text-ink-3'"
         >
           <i aria-hidden="true" :class="tab.icon" class="text-lg"></i>
           {{ tab.name }}
-          <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[10px] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+          <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[0.625rem] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
         </router-link>
-        <button type="button" class="flex flex-col items-center gap-1 py-2 text-[11px] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
+        <button ref="navToggle" type="button" class="flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
           <i aria-hidden="true" class="fas fa-bars text-lg"></i>
           More
         </button>
@@ -130,34 +130,6 @@
           </div>
         </div>
       </transition>
-
-      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" :subtitle="changelogSubtitle" icon="fas fa-gift" @close="showChangelogModal = false">
-        <div v-if="isLoadingChangelog" class="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading changelog">
-          <div class="h-3 w-4/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-3/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="mt-4 h-4 w-2/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-11/12 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-3/4 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-5/6 animate-pulse rounded bg-panel-2"></div>
-        </div>
-        <div v-else-if="changelogError" class="flex flex-col items-center gap-3 py-10 text-center">
-          <p class="ui-alert-bad">{{ changelogError }}</p>
-          <button type="button" class="ui-btn" @click="showChangelog">
-            <i aria-hidden="true" class="fas fa-redo"></i>Retry
-          </button>
-        </div>
-        <div v-else-if="changelogData" class="release-notes" v-html="changelogData"></div>
-        <div v-else class="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-          <i aria-hidden="true" class="fas fa-file-alt text-2xl text-ink-4"></i>
-          No changelog available for this version.
-        </div>
-        <template #footer>
-          <a :href="changelogUrl" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
-            <i aria-hidden="true" class="fas fa-external-link-alt"></i>View on GitHub
-          </a>
-          <button type="button" class="ui-btn-primary" @click="showChangelogModal = false">Close</button>
-        </template>
-      </AppDialog>
 
       <!-- Hidden file input for import -->
       <input
@@ -209,11 +181,18 @@
       </div>
     </div>
 
+    <WhatsNewDialog
+      v-if="whatsNewEntry"
+      :entry="whatsNewEntry"
+      show-all-link
+      @close="closeWhatsNew"
+    />
+
     <!-- Onboarding Tour -->
     <OnboardingTour
       :active="showTour"
       :steps="visibleTourSteps"
-      @done="showTour = false"
+      @done="tourDone"
     />
   </div>
 </template>
@@ -225,15 +204,17 @@ import AppFooter from './AppFooter.vue';
 import AppDialog from './ui/AppDialog.vue';
 import UserAvatar from './ui/UserAvatar.vue';
 import OnboardingTour from './OnboardingTour.vue';
+import WhatsNewDialog from './WhatsNewDialog.vue';
+import { RELEASES_URL, WHATS_NEW } from '@/data/releaseNotes.js';
+import { markSeen, pendingEntry, readSeen, visibleSlides } from '@/utils/whatsNew.js';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
 import { approvalEnabled } from '@/utils/requestApproval';
-import { releaseNotesToHtml } from '@/utils/markdown';
 
 import HomePage from './HomePage.vue';
 import { exportConfig, importConfig } from '@/api/api';
-import { getReleaseByTag } from '@/api/githubReleasesApi';
 import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
+import { readStorage, removeStorage } from '@/utils/storage.js';
 
 // Tabs load on first visit to keep the dashboard chunk small.
 const SettingsServices = defineAsyncComponent(() => import('./settings/SettingsServices.vue'));
@@ -258,6 +239,7 @@ export default {
     AppDialog,
     AppFooter,
     OnboardingTour,
+    WhatsNewDialog,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
@@ -298,15 +280,12 @@ export default {
       showResetModal: false,
       showExportModal: false,
       exportIncludeSecrets: false,
-      showChangelogModal: false,
-      changelogData: null,
-      changelogRelease: null,
-      isLoadingChangelog: false,
-      changelogError: null,
       requestCount: 0,
       requestCountCall: 0,
       showMobileNav: false,
       showTour: false,
+      whatsNewEntry: null,
+      queuedWhatsNew: null,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -385,16 +364,10 @@ export default {
     };
   },
   computed: {
-    changelogUrl() {
-      return this.changelogRelease?.html_url
-        || `https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${this.currentVersion}`;
-    },
-    changelogSubtitle() {
-      const release = this.changelogRelease;
-      if (!release?.published_at) return '';
-      const date = new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      const name = release.name && release.name !== release.tag_name ? `${release.name} · ` : '';
-      return `${name}Released ${date}${release.prerelease ? ' · Pre-release' : ''}`;
+    /** The release note with the slides this viewer can see, or null when there is nothing for them; drives the reopen button. */
+    latestWhatsNew() {
+      const slides = visibleSlides(WHATS_NEW, this.currentUser?.role === 'admin');
+      return slides.length ? { ...WHATS_NEW, slides } : null;
     },
     visibleTabs() {
       if (!this.currentUser) {
@@ -464,6 +437,11 @@ export default {
     },
   },
   watch: {
+    // Escape closes the mobile drawer while it is open.
+    showMobileNav(open) {
+      if (open) document.addEventListener('keydown', this.onDrawerKeydown);
+      else document.removeEventListener('keydown', this.onDrawerKeydown);
+    },
     // The badge was only counted once at load; recount when moving between pages so
     // suggestions created by a job run in the meantime show up too.
     activeTab() {
@@ -481,6 +459,7 @@ export default {
     }
   },
   beforeUnmount() {
+    document.removeEventListener('keydown', this.onDrawerKeydown);
     window.removeEventListener(REQUESTS_CHANGED, this.loadRequestCount);
   },
   async mounted() {
@@ -504,10 +483,17 @@ export default {
       this.loadRequestCount();
 
       // Auto-start tour on first visit or when ?tour=1 is in the URL
-      const tourDone = localStorage.getItem(TOUR_STORAGE_KEY);
+      const tourDone = readStorage(TOUR_STORAGE_KEY);
       const tourForced = window.location.search.includes('tour=1');
       if (!tourDone || tourForced) {
         setTimeout(() => { this.showTour = true; }, 900);
+      }
+      // Release notes do not depend on this browser's tour key (an existing user on a new browser still
+      // gets them); a fresh install marks them seen when setup completes. After a tour, they wait for it to end.
+      const entry = pendingEntry(WHATS_NEW, readSeen(), this.currentUser.role === 'admin');
+      if (entry) {
+        if (!tourDone || tourForced) this.queuedWhatsNew = entry;
+        else setTimeout(() => this.showWhatsNew(entry), 900);
       }
     } catch (error) {
       if (error?.response?.status !== 403) {
@@ -517,6 +503,11 @@ export default {
     }
   },
   methods: {
+    onDrawerKeydown(event) {
+      if (event.key !== 'Escape') return;
+      this.showMobileNav = false;
+      this.$refs.navToggle?.focus();
+    },
     normalizeTabId(tabId) {
       if (!tabId) return '';
       if (tabId === 'suggestions') return 'requests';
@@ -567,8 +558,28 @@ export default {
       await this.logout();
       this.$router.push('/login');
     },
+    showWhatsNew(entry) {
+      this.whatsNewEntry = entry;
+    },
+    // The version label is the one entry point: this release's slides when there are some for the viewer, else the GitHub releases page.
+    openVersionNotes() {
+      if (this.latestWhatsNew) this.showWhatsNew(this.latestWhatsNew);
+      else window.open(RELEASES_URL, '_blank', 'noopener');
+    },
+    tourDone() {
+      this.showTour = false;
+      if (this.queuedWhatsNew) {
+        const entry = this.queuedWhatsNew;
+        this.queuedWhatsNew = null;
+        setTimeout(() => this.showWhatsNew(entry), 400);
+      }
+    },
+    closeWhatsNew() {
+      markSeen([WHATS_NEW.id]);
+      this.whatsNewEntry = null;
+    },
     restartTour() {
-      localStorage.removeItem(TOUR_STORAGE_KEY);
+      removeStorage(TOUR_STORAGE_KEY);
       this.showTour = true;
     },
     async loadConfig() {
@@ -621,31 +632,6 @@ export default {
         if (call === this.requestCountCall) this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
-      }
-    },
-
-    async showChangelog() {
-      this.showChangelogModal = true;
-      this.changelogError = null;
-      
-      if (!this.changelogData) {
-        this.isLoadingChangelog = true;
-        try {
-          // Get release info from GitHub API
-          const response = await getReleaseByTag(this.currentVersion);
-          
-          this.changelogRelease = response.data || null;
-          if (response.data && response.data.body) {
-            this.changelogData = releaseNotesToHtml(response.data.body);
-          } else {
-            this.changelogData = null;
-          }
-        } catch (error) {
-          console.error('Error fetching changelog:', error);
-          this.changelogError = 'Failed to load changelog from GitHub. Please check your internet connection.';
-        } finally {
-          this.isLoadingChangelog = false;
-        }
       }
     },
 

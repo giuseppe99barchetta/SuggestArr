@@ -231,7 +231,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
                          patch.object(service, '_resolve_suggested_title', AsyncMock(side_effect=[english, spanish, {'id': 5}])), \
                          patch.object(service, '_apply_suggestion_rationales', AsyncMock()), \
                          patch('api_service.db.database_manager.DatabaseManager') as database:
-                        database.return_value.get_requested_tmdb_ids.return_value = set()
+                        database.return_value.get_requested_tmdb_ids_by_type.return_value = set()
                         database.return_value.get_ai_dislike_ids.return_value = set()
                         result = await service._search_single(
                             'a mystery', media_type, None, 12, use_history=False, original_language=choice,
@@ -273,7 +273,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('dark thriller', 'movie', None, 12)
 
         self.assertIn('results', result)
@@ -300,7 +300,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch.object(service, '_resolve_suggested_title', AsyncMock(return_value=None)), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('movies like the matrix', 'movie', None, 12)
 
         self.assertEqual(result['results'], [])
@@ -325,7 +325,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch('api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
                    AsyncMock(return_value={'san andreas|2020': 'TMDb recommends it as a disaster spectacle similar to 2012.'})), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('movies like 2012', 'movie', None, 1)
 
         self.assertEqual(result['results'][0]['title'], 'San Andreas')
@@ -346,7 +346,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
             # Mark TMDB id '1' as already requested
-            MockDB.return_value.get_requested_tmdb_ids.return_value = {'1'}
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = {'1'}
             result = await service._search_single('thriller', 'movie', None, 12)
 
         self.assertEqual(len(result['results']), 0)
@@ -365,7 +365,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=history)), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('thriller', 'movie', None, 12, exclude_watched=True)
 
         self.assertEqual(len(result['results']), 0)
@@ -388,7 +388,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('thriller', 'movie', None, 12)
 
         # The mocked TMDB item is en/8.0/2020-01-01, so it must be excluded.
@@ -410,7 +410,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('catastrophic movies like 2012', 'movie', None, 12)
 
         self.assertEqual(result['results'], [])
@@ -690,7 +690,7 @@ class TestSearchSingleBranchCoverage(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(side_effect=Exception('history boom'))), \
              patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb()), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('q', 'movie', None, 12, use_history=True)
         self.assertIn('results', result)
 
@@ -717,7 +717,7 @@ class TestSearchSingleBranchCoverage(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb(search_return=[no_id_item])), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('q', 'movie', None, 12)
         self.assertEqual(len(result['results']), 0)
 
@@ -730,7 +730,7 @@ class TestSearchSingleBranchCoverage(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb(filter_pass=False)), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             result = await service._search_single('q', 'movie', None, 12, exclude_watched=False)
         self.assertEqual(len(result['results']), 0)
 
@@ -747,7 +747,7 @@ class TestSearchSingleBranchCoverage(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_make_tmdb_client',
                           return_value=self._mock_tmdb(omdb_client=mock_omdb)), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             await service._search_single('q', 'movie', None, 12)
         mock_omdb.__aenter__.assert_awaited_once()
 
@@ -1006,6 +1006,16 @@ class TestGetOwnedTmdbIds(unittest.IsolatedAsyncioTestCase):
         load.assert_awaited_once_with(service.config)
         MockSeer.assert_not_called()
 
+    async def test_direct_radarr_sonarr_mode_never_contacts_seer_even_with_saved_credentials(self):
+        service = _make_service_with_seer(REQUEST_BACKEND='arr')
+        with patch('api_service.services.ai_search.ai_search_service.load_library_content',
+                   AsyncMock(return_value={'movie': {'27205'}})) as load,              patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
+            result = await service._get_owned_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'27205'}})
+        load.assert_awaited_once_with(service.config)
+        MockSeer.assert_not_called()
+
     async def test_skipped_when_exclude_downloaded_is_off(self):
         service = _make_service_with_seer(EXCLUDE_DOWNLOADED=False)
         with patch('api_service.services.ai_search.ai_search_service.load_library_content', AsyncMock()) as load, \
@@ -1065,7 +1075,7 @@ class TestGetOwnedTmdbIds(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             MockDB.return_value.get_ai_dislike_ids.return_value = []
             MockDB.return_value.get_ai_likes.return_value = []
             result = await service._search_single(
@@ -1095,7 +1105,7 @@ class TestSearchSingleOwnedExclusion(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_requested_tmdb_ids_by_type.return_value = set()
             MockDB.return_value.get_ai_dislike_ids.return_value = []
             MockDB.return_value.get_ai_likes.return_value = []
             return await service._search_single('dark thriller', 'movie', None, 12, owned_ids=owned_ids)
@@ -1135,7 +1145,7 @@ class TestSearchSinglePersonalFeedback(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
             db = MockDB.return_value
-            db.get_requested_tmdb_ids.return_value = set()
+            db.get_requested_tmdb_ids_by_type.return_value = set()
             db.get_ai_dislike_ids.return_value = []
             db.get_ai_likes.return_value = []
             db.NEGATIVE_FEEDBACK = SuggestionFeedbackMixin.NEGATIVE_FEEDBACK

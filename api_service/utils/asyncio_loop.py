@@ -32,6 +32,30 @@ async def _drain_pending_tasks(logger=None, timeout: float = 5.0) -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
 
+async def gather_cancelling(*aws):
+    """
+    ``asyncio.gather`` that cancels and awaits its own remaining tasks when one fails.
+
+    Plain gather re-raises the first error but leaves the sibling tasks running, so they
+    can keep queuing requests after a run has already reported its count. Only the tasks
+    passed here are touched; the caller and unrelated tasks on the loop are not.
+
+    Args:
+        *aws: Awaitables to run concurrently.
+
+    Returns:
+        list: Their results, in order.
+    """
+    tasks = [asyncio.ensure_future(aw) for aw in aws]
+    try:
+        return await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
 async def _flush_ready_callbacks() -> None:
     """Run callbacks scheduled by async cleanup before loop shutdown."""
     await asyncio.sleep(0)

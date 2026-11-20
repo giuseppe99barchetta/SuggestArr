@@ -66,7 +66,7 @@
 
         <div class="flex min-w-0 flex-col justify-end gap-2 pr-8 sm:self-end">
           <!-- Always one line: details that arrive later are cut, never wrapped, so the title stays put. -->
-          <p class="m-0 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap text-[13px] font-semibold text-ink-3 *:shrink-0" :title="genreLabel || null">
+          <p class="m-0 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap text-[0.8125rem] font-semibold text-ink-3 *:shrink-0" :title="genreLabel || null">
             <span v-if="mediaLabel"><i aria-hidden="true" :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'" class="mr-1.5"></i>{{ mediaLabel }}</span>
             <span v-if="year" aria-hidden="true">·</span>
             <span v-if="year">{{ year }}</span>
@@ -164,7 +164,7 @@
             <span class="flex shrink-0 -space-x-2">
               <template v-for="person in details.cast.slice(0, 4)" :key="person.name">
                 <img v-if="person.profile_path" :src="`https://image.tmdb.org/t/p/w45${person.profile_path}`" alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover ring-2 ring-panel" />
-                <span v-else aria-hidden="true" class="grid h-7 w-7 place-items-center rounded-full bg-raised text-[11px] font-bold text-ink-3 ring-2 ring-panel">{{ person.name.charAt(0) }}</span>
+                <span v-else aria-hidden="true" class="grid h-7 w-7 place-items-center rounded-full bg-raised text-[0.6875rem] font-bold text-ink-3 ring-2 ring-panel">{{ person.name.charAt(0) }}</span>
               </template>
             </span>
             <span class="min-w-0 truncate text-ink-2">{{ castPreview }}</span>
@@ -173,7 +173,7 @@
           <dd v-else class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
             <span v-for="person in details.cast" :key="person.name" class="inline-flex items-center gap-1.5 text-ink-2" :title="person.character ? `${person.name} as ${person.character}` : person.name">
               <img v-if="person.profile_path" :src="`https://image.tmdb.org/t/p/w45${person.profile_path}`" alt="" loading="lazy" class="h-6 w-6 rounded-full object-cover" />
-              <span v-else aria-hidden="true" class="grid h-6 w-6 place-items-center rounded-full bg-raised text-[10px] font-bold text-ink-3">{{ initials(person.name) }}</span>
+              <span v-else aria-hidden="true" class="grid h-6 w-6 place-items-center rounded-full bg-raised text-[0.625rem] font-bold text-ink-3">{{ initials(person.name) }}</span>
               {{ person.name }}
             </span>
           </dd>

@@ -11,6 +11,8 @@ possible:
 - Seer's availability data, which also covers library items whose
   media-server metadata has no TMDB ID (for example shows matched only
   through TVDB).
+- Radarr and Sonarr, when configured: every title they manage, monitored or
+  not, which covers titles added without going through Seer.
 """
 from typing import Any, Dict, Optional, Set
 
@@ -111,6 +113,31 @@ async def load_media_server_content(env_vars: Dict[str, Any]) -> Dict[str, Set[s
     return {}
 
 
+async def load_arr_content(env_vars: Dict[str, Any]) -> Dict[str, Set[str]]:
+    """Load the TMDB IDs of every title in the configured Radarr and Sonarr instances.
+
+    Monitored or not, a title Radarr/Sonarr already knows is "owned". Each
+    instance is best-effort: one that is unset or fails is skipped.
+
+    :param env_vars: Runtime configuration providing ``RADARR_*`` / ``SONARR_*`` URL and token.
+    :return: Dict mapping 'movie' / 'tv' to sets of TMDB ID strings.
+    """
+    from api_service.services.arr.arr_client import SERVICES, ArrClient
+
+    content: Dict[str, Set[str]] = {}
+    for service, (_, media_type) in SERVICES.items():
+        prefix = service.upper()
+        url, token = env_vars.get(f"{prefix}_API_URL"), env_vars.get(f"{prefix}_TOKEN")
+        if not url or not token:
+            continue
+        try:
+            async with ArrClient(service, url, token) as client:
+                merge_content_sets(content, {media_type: await client.get_tmdb_ids()})
+        except Exception as exc:
+            logger.warning("Could not load titles from %s; skipping it: %s", service.capitalize(), exc)
+    return content
+
+
 async def load_library_content(
     env_vars: Dict[str, Any],
     seer_client=None,
@@ -152,4 +179,6 @@ async def load_library_content(
             merge_content_sets(content, await seer_client.get_available_tmdb_ids())
         except Exception as exc:
             logger.warning("Could not load available titles from Seer; using the media server library only: %s", exc)
+
+    merge_content_sets(content, await load_arr_content(env_vars))
     return content

@@ -10,12 +10,17 @@ from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_tab
+from api_service.config.config import ARR_INSTANCES, arr_default_profile, get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
+from api_service.services.arr.arr_client import ArrClient
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import MAX_GROUP_PEOPLE, get_llm_client
+
+MAX_QUERY_CHARS = 500
+MAX_RESULTS_LIMIT = 24
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
@@ -23,6 +28,67 @@ logger = LoggerManager.get_logger("AiSearchRoute")
 _LEGACY_FEEDBACK = {"like": "interested", "dislike": "not_interested"}
 _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", "backdrop_path",
                     "logo_path", "rating", "votes", "genre_ids", "origin_country")
+
+
+_MAX_METADATA_TEXT = 2000
+
+
+def _display_metadata(metadata) -> dict:
+    """
+    Keep only well-formed display fields from client-supplied metadata.
+
+    The values go into the shared metadata cache, so wrong types are dropped
+    instead of failing after the upstream request has already been made.
+
+    Args:
+        metadata: The ``metadata`` object from the request body (any JSON value).
+
+    Returns:
+        dict: Allowed fields only; strings capped, numbers kept, lists of str/int as str.
+    """
+    if not isinstance(metadata, dict):
+        return {}
+    clean = {}
+    for key in _METADATA_FIELDS:
+        value = metadata.get(key)
+        if key in ("genre_ids", "origin_country"):
+            if isinstance(value, list) and all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in value):
+                clean[key] = [str(v)[:16] for v in value[:50]]
+        elif key in ("rating", "votes"):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                clean[key] = value
+        elif isinstance(value, str):
+            clean[key] = value[:_MAX_METADATA_TEXT]
+    return clean
+
+
+def _record_local_request(media_type, tmdb_id, metadata, rationale):
+    """
+    Store the metadata and the request locally after the upstream request succeeded.
+
+    Each write is isolated: a failure is logged and never turns the success into an
+    error, and a metadata failure does not skip recording the request.
+
+    Args:
+        media_type: 'movie' or 'tv'.
+        tmdb_id: TMDb id of the requested title.
+        metadata: Output of :func:`_display_metadata`.
+        rationale: Text stored with the request.
+    """
+    try:
+        db = DatabaseManager()
+    except Exception as exc:
+        logger.error("AI search: database unavailable, %s %s not recorded locally: %s", media_type, tmdb_id, exc)
+        return
+    try:
+        db.save_metadata({**metadata, "id": str(tmdb_id)}, media_type)
+    except Exception as exc:
+        logger.error("AI search: could not save metadata for %s %s: %s", media_type, tmdb_id, exc)
+    try:
+        # Tagged 'ai_search' to keep these requests out of the "By Watched Content" view.
+        db.save_request(media_type, str(tmdb_id), "ai_search", None, rationale=rationale)
+    except Exception as exc:
+        logger.error("AI search: could not record request for %s %s: %s", media_type, tmdb_id, exc)
 
 
 @ai_search_bp.before_request
@@ -165,6 +231,8 @@ async def ai_search_query():
         query = (data.get("query") or "").strip()
         if not query:
             return jsonify({"status": "error", "message": "query is required"}), 400
+        if len(query) > MAX_QUERY_CHARS:
+            return jsonify({"status": "error", "message": f"query must be at most {MAX_QUERY_CHARS} characters"}), 400
 
         media_type = data.get("media_type", "movie")
         if media_type not in ("movie", "tv", "both"):
@@ -185,7 +253,18 @@ async def ai_search_query():
         raw_people = data.get("people")
         if raw_people is not None and not isinstance(raw_people, list):
             return jsonify({"status": "error", "message": "people must be a list"}), 400
-        max_results = int(data.get("max_results") or 12)
+        raw_max = data.get("max_results")
+        if raw_max is None:
+            max_results = 12
+        elif isinstance(raw_max, int) and not isinstance(raw_max, bool):
+            max_results = raw_max
+        elif isinstance(raw_max, str) and raw_max.strip().isdigit():
+            max_results = int(raw_max)
+        else:
+            return jsonify({"status": "error", "message": "max_results must be a whole number"}), 400
+        if max_results < 1:
+            return jsonify({"status": "error", "message": "max_results must be at least 1"}), 400
+        max_results = min(max_results, MAX_RESULTS_LIMIT)  # every result costs an LLM and a TMDb call
         use_history = data.get("use_history", True)
         if not isinstance(use_history, bool):
             use_history = True
@@ -198,7 +277,7 @@ async def ai_search_query():
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
-        if not get_llm_client():
+        if not get_llm_client(_current_user_id()):
             return jsonify({
                 "status": "error",
                 "message": (
@@ -221,6 +300,11 @@ async def ai_search_query():
             user_ids = [str(profile["external_user_id"])] if profile else []
         if not people and not user_ids:
             use_history = False
+        # Other people's history and taste go only to the shared provider, never to one a person chose.
+        others = bool(user and user.get("role") == "admin" and user_ids) or any(
+            not person.get("requester") for person in people or [])
+        if not others:
+            service.llm_user_id = _current_user_id()
 
         result = await service.search(
             query=query,
@@ -282,7 +366,7 @@ async def ai_search_request():
         media_type = data.get("media_type", "movie")
         rationale = data.get("rationale") or None
         search_query = (data.get("search_query") or "").strip() or None
-        metadata = data.get("metadata") or {}
+        metadata = _display_metadata(data.get("metadata"))
         # Prefer the original search query as the stored rationale so the
         # "AI Requests" tab can show what the user was looking for.
         db_rationale = search_query or rationale
@@ -296,14 +380,15 @@ async def ai_search_request():
         seer_url = (config.get("SEER_API_URL") or "").rstrip("/")
         seer_token = config.get("SEER_TOKEN", "")
         seer_session = config.get("SEER_SESSION_TOKEN", "")
+        direct_arr = get_request_backend(config) == "arr"  # decided by the setting, never by leftover Seer credentials
 
-        if not seer_url or not seer_token:
+        if not direct_arr and (not seer_url or not seer_token):
             return jsonify({
                 "status": "error",
                 "message": "Seer is not configured.",
             }), 400
 
-        # Build Seer request payload
+        # Build the request payload (Seer-shaped; Radarr/Sonarr reuse the same fields)
         req_payload = {"mediaType": media_type, "mediaId": int(tmdb_id)}
         if media_type == "tv":
             num_seasons = config.get("FILTER_NUM_SEASONS", "all")
@@ -318,6 +403,27 @@ async def ai_search_request():
                 req_payload["seasons"] = "all"
             else:
                 req_payload["seasons"] = list(range(1, int(num_seasons) + 1))
+
+        if direct_arr:
+            # Parity with the Seer path: no anime classification here, default profiles only.
+            service, url_key, token_key = next(
+                ((name, u, t) for name, (u, t, served) in ARR_INSTANCES.items() if served == media_type), (None, None, None))
+            profile = arr_default_profile(config, media_type)
+            if not service or not config.get(url_key) or not config.get(token_key) or profile is None:
+                return jsonify({
+                    "status": "error",
+                    "message": "Radarr/Sonarr is not configured for this media type.",
+                }), 400
+            req_payload.update(profileId=profile["profileId"], rootFolder=profile["rootFolder"],
+                               tags=profile.get("tags") or [])
+            try:
+                async with ArrClient(service, config[url_key], config[token_key]) as arr:
+                    await arr.add(req_payload)
+            except Exception as exc:
+                logger.error("%s request failed: %s", service.capitalize(), exc)
+                return jsonify({"status": "error", "message": f"{service.capitalize()} could not add the title."}), 500
+            _record_local_request(media_type, tmdb_id, metadata, db_rationale)
+            return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 
         # A stored Seer session can be valid but belong to a user without request
         # permission. Retry once with the configured technical API key in that case.
@@ -339,18 +445,9 @@ async def ai_search_request():
                         continue
 
                     if response.status in (200, 201, 202):
-                        db = DatabaseManager()
-                        # Persist metadata using data supplied by the frontend so the
-                        # title and poster are stored correctly in the local DB.
-                        # Only display fields, keyed to the requested id: the cache is shared by all users.
-                        media_dict = {key: metadata[key] for key in _METADATA_FIELDS if key in metadata}
-                        media_dict["id"] = str(tmdb_id)
-                        db.save_metadata(media_dict, media_type)
-                        # Tag with 'ai_search' source to keep these requests out of the
-                        # "By Watched Content" view in the dashboard.
-                        db.save_request(
-                            media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale
-                        )
+                        # Metadata comes from the frontend so the title and poster show locally;
+                        # only display fields, keyed to the requested id (the cache is shared).
+                        _record_local_request(media_type, tmdb_id, metadata, db_rationale)
                         return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 
                     if response.status == 409:
@@ -381,7 +478,7 @@ def ai_search_status():
     Returns:
         JSON with 'available' bool and optional 'message'.
     """
-    client = get_llm_client()
+    client = get_llm_client(_current_user_id())
     if client:
         return jsonify({"available": True}), 200
     return jsonify({

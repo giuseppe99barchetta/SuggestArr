@@ -42,15 +42,19 @@ class RequestReplacementMixin:
             return cursor.fetchone() is not None
 
     def get_pending_request_replacements(self, instance, limit=10):
+        """Pending replacements of deliveries to the Seer ``instance``; None selects the direct
+        Radarr/Sonarr ones (rejected in SuggestArr, never tracked in Seer)."""
         ph = '?' if self.db_type == 'sqlite' else '%s'
+        instance_clause = 'p.seer_instance IS NULL' if instance is None else f'p.seer_instance={ph}'
+        params = (limit,) if instance is None else (instance, limit)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 'SELECT p.id AS delivery_id,p.job_id,p.owner_id,p.user_id,p.media_type,j.max_results '
                 'FROM request_replacements r JOIN pending_requests p ON p.id=r.delivery_id '
                 'LEFT JOIN discover_jobs j ON j.id=p.job_id '
-                f"WHERE r.status='pending' AND p.seer_instance={ph} "
-                f'ORDER BY r.checked_at,p.id LIMIT {ph}', (instance, limit),
+                f"WHERE r.status='pending' AND {instance_clause} "
+                f'ORDER BY r.checked_at,p.id LIMIT {ph}', params,
             )
             return [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
 

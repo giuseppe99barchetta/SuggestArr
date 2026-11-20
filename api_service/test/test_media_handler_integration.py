@@ -629,12 +629,11 @@ async def test_jellyfin_handler_fetches_parent_series_tmdb_id_for_episode(test_l
         "ProviderIds": {"Tvdb": "795681", "Tmdb": "4678377"},
     }
 
-    await handler.process_episode(deepcopy(USER), episode)
+    seed = await handler._jellyfin_item_to_seed(episode, "TV", False, deepcopy(USER))
 
     jellyfin_client.get_series_provider_ids.assert_awaited_once_with("series-22")
     tmdb_client.get_metadata.assert_awaited_once_with("22", "tv")
-    tmdb_client.find_similar_tvshows.assert_awaited_once_with("22", dry_run=True)
-    handler.request_similar_media.assert_awaited_once()
+    assert seed["tmdb_id"] == "22" and seed["media_type"] == "tv"
 
 
 @pytest.mark.asyncio
@@ -659,7 +658,7 @@ async def test_recommendation_automation_dry_run_preserves_async_flow_and_logs(m
     monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
     monkeypatch.setattr(recommendation_module, "JobRepository", lambda: fake_repo)
     monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
-    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: fake_seer)
+    monkeypatch.setattr("api_service.utils.clients.SeerClient", lambda *args, **kwargs: fake_seer)
     monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
     monkeypatch.setattr(recommendation_module, "PlexClient", lambda *args, **kwargs: fake_plex)
     monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
@@ -693,7 +692,7 @@ async def test_jellyfin_standard_job_without_simkl_uses_tmdb(monkeypatch):
     monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
     monkeypatch.setattr(recommendation_module, "JobRepository", lambda: FakeJobRepository(job_data))
     monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
-    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: FakeSeerClient())
+    monkeypatch.setattr("api_service.utils.clients.SeerClient", lambda *args, **kwargs: FakeSeerClient())
     monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
     monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
     monkeypatch.setattr(recommendation_module.MediaUserSimklAugmentor, "from_env", lambda *args, **kwargs: None)
@@ -726,7 +725,7 @@ async def test_recommendation_automation_dry_run_respects_job_max_results(monkey
     monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
     monkeypatch.setattr(recommendation_module, "JobRepository", lambda: fake_repo)
     monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
-    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: fake_seer)
+    monkeypatch.setattr("api_service.utils.clients.SeerClient", lambda *args, **kwargs: fake_seer)
     monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
     monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
 
@@ -787,3 +786,29 @@ async def test_interpret_search_query_coerces_original_language_and_accepts_empt
 
     assert result["discover_params"]["original_language"] == expected_language
     assert result["suggested_titles"][0]["title"] == "Film 1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("item_dates", "expected"), [
+    ({"viewedAt": 1700000000}, 1700000000),
+    ({"viewedAt": "1700000000"}, 1700000000),
+    # An unparsable viewedAt must not stop the fallback to addedAt.
+    ({"viewedAt": "not-a-date", "addedAt": 1600000000}, 1600000000),
+    ({"originallyAvailableAt": "2020-01-02T00:00:00Z"}, 1577923200),
+])
+async def test_plex_seed_reads_epoch_and_falls_back(test_logger, item_dates, expected):
+    """Plex sends epoch seconds; parsing them as ISO used to leave every Plex seed at date 0."""
+    handler = PlexHandler(
+        plex_client=FakePlexClient(),
+        seer_client=FakeSeerClient(),
+        tmdb_client=FakeTMDbClient(),
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        dry_run=True,
+    )
+    item = {"type": "movie", "title": "Tenet", "key": "/library/metadata/1", **item_dates}
+
+    seed = await handler._plex_item_to_seed(item)
+
+    assert seed["date"] == expected

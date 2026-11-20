@@ -1,16 +1,13 @@
-import asyncio
-import threading
 from flask import Blueprint, jsonify, request, g
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
-from api_service.automate_process import ContentAutomation
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
-from api_service.utils.asyncio_loop import close_event_loop
 from api_service.utils.request_profiles import (
     validate_request_profiles,
+    validate_request_profiles_with_arr,
     validate_request_profiles_with_seer,
 )
 from api_service.utils import request_scope
@@ -24,8 +21,6 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
 
-_force_run_lock = threading.Lock()
-_force_run_running = False
 _FEEDBACK_VALUES = FEEDBACK_VALUES
 _FEEDBACK_REASONS = FEEDBACK_REASONS
 
@@ -162,13 +157,14 @@ def _suggestion_scope(db):
         db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
-def _localize(db, *groups):
+def _localize(db, *groups, logos=True):
     """
     Show the listed titles in the reader's language (see services/tmdb/localization.py).
 
     Args:
         db: Database manager.
         groups: (items, fields) pairs, localized with one shared lookup budget.
+        logos: Also fill localized logos in the background.
     """
     env = load_env_vars()
     try:
@@ -179,7 +175,8 @@ def _localize(db, *groups):
     integration = db.get_integration('tmdb') or {}
     api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
     localize_groups(list(groups), language, db, api_key)
-    fill_logos(list(groups), language, db, api_key)
+    if logos:
+        fill_logos(list(groups), language, db, api_key)
 
 
 def _visible_request_user_ids(db):
@@ -212,6 +209,40 @@ def request_workflow():
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
 
+# Upper bound of one "Approve all" / "Reject all": bounds per-row lookups and decide calls.
+_ALL_PENDING_MAX = 1000
+
+
+@automation_bp.route('/requests/workflow/pending', methods=['GET'])
+@limiter.limit('20 per minute')
+def pending_workflow():
+    """
+    List every suggestion awaiting approval that matches the Requests filters.
+
+    Backs "Approve all" / "Reject all": one query, so the confirmation shows a
+    consistent set instead of pages of a list that may change while loading.
+
+    Returns:
+        JSON with ``items`` (at most ``_ALL_PENDING_MAX``) and ``truncated``,
+        true when more matching suggestions are waiting than were returned.
+    """
+    media_type = request.args.get('media_type', 'all')
+    if media_type not in ('all', 'movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    # One row past the cap tells from this same SELECT whether anything was left out.
+    items, _total = db.list_suggestions(
+        scope.owner_id, 'awaiting_approval', request.args.get('search', '').strip()[:100], 1,
+        _ALL_PENDING_MAX + 1, media_type, scope.media_user_ids, None, scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports,
+        sort_by=request.args.get('sort_by', 'date-desc'))
+    truncated = len(items) > _ALL_PENDING_MAX
+    items = items[:_ALL_PENDING_MAX]
+    _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]), logos=False)
+    return jsonify({'status': 'success', 'items': items, 'truncated': truncated}), 200
+
+
 def _requested_profiles():
     """
     Read an optional per-media-type request profile from an approval call.
@@ -229,9 +260,7 @@ def _requested_profiles():
                     that means something else on the server it ends up on.
     """
     requested = (request.get_json(silent=True) or {}).get('profile')
-    profile = validate_request_profiles(requested)
-    validate_request_profiles_with_seer(profile)
-    return profile
+    return validate_request_profiles(requested)
 
 
 def _decide_workflow(approve, blacklist=False):
@@ -239,10 +268,18 @@ def _decide_workflow(approve, blacklist=False):
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
 
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
     profile = {}
     if approve:
         try:
             profile = _requested_profiles()
+            # Each backend only knows (and only needs to validate) profiles for the rows it will deliver.
+            backends = db.awaiting_backends(ids, scope.owner_id, scope.include_unassigned) if profile else set()
+            if 'seer' in backends:
+                validate_request_profiles_with_seer(profile)
+            if 'arr' in backends:
+                validate_request_profiles_with_arr(profile, load_env_vars())
         except ValueError:
             logger.warning("Invalid request profile supplied in workflow decision", exc_info=True)
             return jsonify({'status': 'error', 'message': 'Invalid profile request'}), 400
@@ -250,12 +287,14 @@ def _decide_workflow(approve, blacklist=False):
     # The profile and the status change are committed together: the worker
     # never picks up a queued row without its profile, and a failed approval
     # leaves no profile behind.
-    db = DatabaseManager()
-    scope = _suggestion_scope(db)
+    report = {}
     changed = db.decide_suggestions(
         ids, scope.owner_id, int(g.current_user['id']), approve, blacklist, profiles=profile,
-        include_unassigned=scope.include_unassigned)
-    return jsonify({'status': 'success', 'updated': changed}), 200
+        include_unassigned=scope.include_unassigned, report=report,
+        # Blacklisting bans this title, not the job's slot: an alternative is still offered.
+        replace_rejected=not approve and load_env_vars().get('REPLACE_REJECTED_REQUESTS') is True)
+    return jsonify({'status': 'success', 'updated': changed,
+                    'ignored_overrides': report.get('ignored_overrides', 0)}), 200
 
 
 @automation_bp.route('/requests/workflow/approve', methods=['POST'])
@@ -370,41 +409,6 @@ def clear_sent_request_feedback(media_type, tmdb_id):
     removed = db.clear_media_feedback(int(g.current_user['id']), media_user_id, tmdb_id, media_type)
     return jsonify({'status': 'success', 'removed': removed}), 200
 
-
-def _run_automation_in_background():
-    """Run the automation in a dedicated thread with its own event loop."""
-    global _force_run_running
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        content_automation = loop.run_until_complete(ContentAutomation.create())
-        loop.run_until_complete(content_automation.run())
-        logger.info("Force run completed successfully.")
-    except Exception as e:
-        logger.error(f'Background force run error: {str(e)}', exc_info=True)
-    finally:
-        close_event_loop(loop, logger)
-        with _force_run_lock:
-            _force_run_running = False
-
-
-@automation_bp.route('/force_run', methods=['POST'])
-@require_role('admin')
-@limiter.limit("5 per minute")
-def run_now():
-    """
-    Endpoint to execute the automation process in a background thread.
-    Returns immediately while the task runs asynchronously.
-    """
-    global _force_run_running
-    with _force_run_lock:
-        if _force_run_running:
-            return jsonify({'status': 'busy', 'message': 'A force run is already in progress.'}), 409
-        _force_run_running = True
-
-    thread = threading.Thread(target=_run_automation_in_background, daemon=True)
-    thread.start()
-    return jsonify({'status': 'success', 'message': 'Task started in the background!'}), 202
 
 def _list_page(default_per_page):
     """

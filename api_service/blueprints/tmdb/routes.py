@@ -1,3 +1,4 @@
+import asyncio
 from collections import OrderedDict
 import json
 import threading
@@ -187,7 +188,7 @@ def test_tmdb_connection():
                         if resp.status == 401:
                             return {'status': 'error', 'message': 'Invalid TMDB API key'}
                         return {'status': 'error', 'message': f'TMDB API returned status {resp.status}'}
-            except aiohttp.ClientTimeout:
+            except asyncio.TimeoutError:
                 return {'status': 'error', 'message': 'Connection to TMDB API timed out'}
             except aiohttp.ClientError as exc:
                 logger.error("TMDB connection error: %s", exc)

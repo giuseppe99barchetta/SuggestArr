@@ -22,7 +22,7 @@
 
     <div class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
       <div v-for="slider in sliders" :key="slider.key" class="flex flex-col gap-1.5">
-        <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+        <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
           <label :for="slider.key">{{ slider.label }}</label>
           <InfoTip :text="slider.help" />
           <span class="ml-auto font-mono text-ink">{{ localFilters[slider.key] || slider.fallback }}</span>

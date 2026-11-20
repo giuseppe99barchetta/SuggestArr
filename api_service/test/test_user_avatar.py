@@ -168,6 +168,9 @@ def avatar_client(monkeypatch):
     monkeypatch.setattr('api_service.auth.middleware.load_env_vars', lambda: {'AUTH_MODE': 'enabled'})
     monkeypatch.setattr('api_service.blueprints.avatar.ConfigService.get_runtime_config', lambda: {'SELECTED_SERVICE': 'jellyfin'})
     monkeypatch.setattr('api_service.auth.middleware.AuthService.verify_access_token', lambda token: {'sub': '3', 'username': 'alice', 'role': 'user'})
+    # The middleware re-reads the account behind a token; these tests stub the token claims only.
+    monkeypatch.setattr('api_service.auth.middleware._load_token_account', lambda payload: {
+        'id': int(payload['sub']), 'username': payload.get('username', 'tester'), 'role': payload['role'], 'is_active': True})
     monkeypatch.setattr(limiter, 'enabled', False)
     invalidate_setup_cache()
     app = Flask(__name__)

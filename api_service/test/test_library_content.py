@@ -161,6 +161,31 @@ class TestLoadLibraryContent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {})
         media_load.assert_not_awaited()
 
+    async def test_merges_radarr_and_sonarr_titles(self):
+        env = {'RADARR_API_URL': 'http://radarr:7878', 'RADARR_TOKEN': 'k',
+               'SONARR_API_URL': 'http://sonarr:8989', 'SONARR_TOKEN': 'k'}
+        ids = {'radarr': {'27205'}, 'sonarr': {'1399'}}
+
+        def fake_client(service, url, token):
+            client = MagicMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            client.get_tmdb_ids = AsyncMock(return_value=ids[service])
+            return client
+
+        with patch('api_service.services.arr.arr_client.ArrClient', fake_client):
+            result = await load_library_content(env, _seer_client(available={'movie': {'155'}, 'tv': set()}),
+                                                media_server_content={'movie': {'603'}})
+
+        self.assertEqual(result, {'movie': {'603', '155', '27205'}, 'tv': {'1399'}})
+
+    async def test_arr_failure_or_missing_config_is_skipped(self):
+        env = {'RADARR_API_URL': 'http://radarr:7878', 'RADARR_TOKEN': 'k', 'SONARR_API_URL': 'http://sonarr:8989'}
+        with patch('api_service.services.arr.arr_client.ArrClient', side_effect=RuntimeError('down')):
+            result = await load_library_content(env, _seer_client(), media_server_content={'movie': {'603'}})
+
+        self.assertEqual(result, {'movie': {'603'}})
+
     async def test_skipped_when_exclude_downloaded_is_off(self):
         seer_client = _seer_client(exclude_downloaded=False)
         with patch('api_service.services.library_content.load_media_server_content', AsyncMock()) as media_load:

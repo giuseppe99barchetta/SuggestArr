@@ -18,11 +18,11 @@
           <span class="block text-sm font-semibold text-ink">{{ provider.name }}</span>
           <span class="mt-0.5 block text-xs text-ink-3">{{ provider.caption }}</span>
         </span>
-        <i aria-hidden="true" class="fas fa-arrow-up-right-from-square shrink-0 text-[11px] text-ink-4 group-hover:text-brand-ink"></i>
+        <i aria-hidden="true" class="fas fa-arrow-up-right-from-square shrink-0 text-[0.6875rem] text-ink-4 group-hover:text-brand-ink"></i>
       </a>
     </div>
 
-    <p class="m-0 mb-1.5 mt-6 text-[11px] font-semibold uppercase tracking-widest text-ink-4">Other ways to help</p>
+    <p class="m-0 mb-1.5 mt-6 text-[0.6875rem] font-semibold uppercase tracking-widest text-ink-4">Other ways to help</p>
     <div class="divide-y divide-edge overflow-hidden rounded-card border border-edge">
       <a
         v-for="way in otherWays"
@@ -34,10 +34,10 @@
       >
         <i aria-hidden="true" class="w-5 shrink-0 text-center text-lg text-ink-3" :class="way.icon"></i>
         <span class="min-w-0 flex-1">
-          <span class="block text-[13px] font-semibold">{{ way.title }}</span>
+          <span class="block text-[0.8125rem] font-semibold">{{ way.title }}</span>
           <span class="mt-0.5 block text-xs text-ink-3">{{ way.caption }}</span>
         </span>
-        <i aria-hidden="true" class="fas fa-arrow-up-right-from-square shrink-0 text-[11px] text-ink-4 group-hover:text-brand-ink"></i>
+        <i aria-hidden="true" class="fas fa-arrow-up-right-from-square shrink-0 text-[0.6875rem] text-ink-4 group-hover:text-brand-ink"></i>
       </a>
     </div>
 

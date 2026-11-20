@@ -3,6 +3,9 @@ import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useToast } from "vue-toast-notification";
 import axios from "axios";
 import { getLatestRelease } from "@/api/githubReleasesApi";
+import { isNewerVersion } from "./isNewerVersion.js";
+
+export { isNewerVersion };
 
 export function useVersionCheck() {
   const toast = useToast();
@@ -55,7 +58,7 @@ export function useVersionCheck() {
       lastCheckTime = Date.now();
     } catch (error) {
       console.error("getCurrentVersion error:", error);
-      currentVersion.value = "v2.0.0";
+      currentVersion.value = `${__APP_VERSION__ || "unknown"}`;
       currentImageTag.value = "latest";
     }
   };
@@ -87,10 +90,7 @@ export function useVersionCheck() {
       if (!latest) return;
 
       latestVersion.value = latest;
-      const cleanLatest = latest.replace(/^v/, "");
-      const cleanCurrent = currentVersion.value.replace(/^v/, "");
-
-      const isUpdateAvailable = cleanLatest > cleanCurrent;
+      const isUpdateAvailable = isNewerVersion(latest, currentVersion.value);
       updateAvailable.value = isUpdateAvailable;
 
       if (isUpdateAvailable) {
@@ -117,12 +117,12 @@ export function useVersionCheck() {
         if (isNightly) {
           window.open(
             "https://hub.docker.com/r/ciuse99/suggestarr/tags",
-            "_blank",
+            "_blank", "noopener"
           );
         } else {
           window.open(
             "https://github.com/giuseppe99barchetta/SuggestArr/releases/latest",
-            "_blank",
+            "_blank", "noopener"
           );
         }
       },

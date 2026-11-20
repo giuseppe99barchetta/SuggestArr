@@ -7,7 +7,7 @@
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
           <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
-          <p class="m-0 mt-0.5 truncate text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+          <p class="m-0 mt-0.5 truncate text-[0.8125rem] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
         </div>
         <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="requestClose">
           <i aria-hidden="true" class="fas fa-times"></i>
@@ -27,9 +27,9 @@
               :aria-current="activeSection === section.id ? 'step' : null"
               @click="scrollToSection(section.id)"
             >
-              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
+              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[0.6875rem] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
               <span class="flex min-w-0 flex-col">
-                <span class="text-[13px] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
+                <span class="text-[0.8125rem] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
                 <span class="truncate text-xs text-ink-4">{{ section.summary }}</span>
               </span>
             </button>
@@ -129,7 +129,7 @@
                       v-for="type in visibleMediaTypes"
                       :key="type.value"
                       type="button"
-                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
+                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[0.8125rem] font-semibold transition-colors"
                       :class="form.media_type === type.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
                       :aria-pressed="form.media_type === type.value ? 'true' : 'false'"
                       @click="form.media_type = type.value"
@@ -141,7 +141,7 @@
                 </div>
 
                 <div v-if="!oneTime" class="flex flex-col gap-1.5">
-                  <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                  <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                     <label for="jobName">Name</label>
                     <InfoTip text="Shown in the job list and history. Leave it empty to use the suggested name." />
                   </div>
@@ -188,7 +188,7 @@
               <template v-else>
                 <button type="button" :class="disclosureClass" :aria-expanded="qualityOpen.toString()" aria-controls="job-quality-filters" @click="qualityOpen = !qualityOpen">
                   <span class="flex min-w-0 flex-col items-start gap-0.5">
-                    <span class="text-[13px] font-semibold text-ink">Quality filters</span>
+                    <span class="text-[0.8125rem] font-semibold text-ink">Quality filters</span>
                     <span class="text-xs font-normal text-ink-4">Rating, votes, runtime, release date, language, genres and streaming services.</span>
                   </span>
                   <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': qualityOpen }"></i>
@@ -211,7 +211,8 @@
                 </div>
                 <div class="flex flex-col divide-y divide-edge rounded-ctl border border-edge">
                   <div class="flex items-center gap-1.5 px-4 py-3">
-                    <BaseCheckbox v-model="form.pause_if_pending_requests" label="Seer still has requests waiting for approval" />
+                    <BaseCheckbox v-model="form.pause_if_pending_requests" :label="requestBackend === 'arr' ? 'Radarr/Sonarr still has downloads in the queue' : 'Seer still has requests waiting for approval'"
+                      :description="requestBackend === 'arr' ? 'Stalled or failed downloads count too, until you clear them in Radarr/Sonarr.' : ''" />
                     <InfoTip text="Avoids piling up new requests while Seer admins haven't reviewed the previous ones." />
                   </div>
 
@@ -240,7 +241,7 @@
                       <BaseCheckbox v-model="form.prevent_suggestions_if_unwatched" label="Pause if suggestions remain unwatched" />
                       <InfoTip text="Waits until people actually watch what was suggested before adding more." />
                     </div>
-                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[13px] text-ink-3" for="unwatchedDays">
+                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[0.8125rem] text-ink-3" for="unwatchedDays">
                       for
                       <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days" class="ui-input h-9! w-20" type="number" min="1" required />
                       days
@@ -266,7 +267,7 @@
                 </div>
               </div>
 
-              <div class="mb-6">
+              <div v-if="requestBackend !== 'arr'" class="mb-6">
                 <label class="ui-label">Request as
                   <select v-model="form.seer_identity_mode" class="ui-input">
                     <option v-for="option in seerIdentityOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
@@ -279,21 +280,21 @@
                 <div :class="fieldLabelClass"><span>Limits</span></div>
                 <div class="grid gap-4 sm:grid-cols-3">
                   <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="maxResults">Per run</label>
                       <InfoTip :text="maxResultsHelp" />
                     </div>
                     <input id="maxResults" v-model.number="form.max_results" class="ui-input" type="number" min="1" :max="maxResultsLimit" required />
                   </div>
                   <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="maxRequestsPerUser">Per user</label>
-                      <InfoTip text="Most automatic requests credited to one Seer user within the window. 0 means no extra limit; the per-run limit still applies." />
+                      <InfoTip :text="`Most automatic requests ${requestBackend === 'arr' ? 'made for one user' : 'credited to one Seer user'} within the window. 0 means no extra limit; the per-run limit still applies.`" />
                     </div>
                     <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user" class="ui-input" type="number" min="0" max="1000" required />
                   </div>
                   <div v-if="form.max_requests_per_user > 0" class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="requestLimitWindowHours">Window (hours)</label>
                       <InfoTip text="The per-user limit counts requests made in this many past hours, e.g. 24 for a daily cap or 168 for a weekly one." />
                     </div>
@@ -304,12 +305,39 @@
 
               <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
                 <span class="flex min-w-0 flex-col items-start gap-0.5">
-                  <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
+                  <span class="text-[0.8125rem] font-semibold text-ink">Radarr / Sonarr overrides</span>
                   <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
                 </span>
                 <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
               </button>
-              <div v-if="profilesOpen" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+              <div v-if="profilesOpen && requestBackend === 'arr'" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]" data-testid="job-arr-profiles">
+                <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
+                  <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                  <template v-if="arrOptions[type]">
+                    <label class="ui-label">Quality profile
+                      <select :value="arrField(type, 'profileId')" class="ui-input" @change="setArrField(type, 'profileId', $event.target.value === '' ? '' : Number($event.target.value))">
+                        <option value="">Use the default profile</option>
+                        <option v-for="option in arrOptions[type].profiles" :key="option.id" :value="option.id">{{ option.name }}</option>
+                      </select>
+                    </label>
+                    <template v-if="arrField(type, 'profileId') !== ''">
+                      <label class="ui-label">Root folder
+                        <select :value="arrField(type, 'rootFolder')" class="ui-input" @change="setArrField(type, 'rootFolder', $event.target.value)">
+                          <option value="" disabled>Select root folder</option>
+                          <option v-for="folder in arrOptions[type].rootFolders" :key="folder.path" :value="folder.path">{{ folder.path }}</option>
+                        </select>
+                      </label>
+                      <div v-if="arrOptions[type].tags.length" class="flex flex-wrap gap-2" role="group" :aria-label="`${type === 'movie' ? 'Radarr' : 'Sonarr'} tags`">
+                        <label v-for="tag in arrOptions[type].tags" :key="tag.id" class="flex cursor-pointer items-center gap-1.5 rounded-full border border-edge px-2.5 py-1 text-xs text-ink-3">
+                          <input type="checkbox" :checked="(form.request_profiles[type].tags || []).includes(tag.id)" @change="toggleArrTag(type, tag.id)" />{{ tag.label }}
+                        </label>
+                      </div>
+                    </template>
+                  </template>
+                  <p v-else class="m-0 text-xs text-ink-4">{{ type === 'movie' ? 'Radarr' : 'Sonarr' }} is not configured or not reachable: the default profile from Services is used.</p>
+                </div>
+              </div>
+              <div v-if="profilesOpen && requestBackend !== 'arr'" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
                 <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
                   <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
                   <label class="ui-label">Server
@@ -369,7 +397,8 @@ import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
-import { listTraktJobUsers } from '@/api/api';
+import { getSavedArrOptionsApi, listTraktJobUsers } from '@/api/api';
+import { hasJobProfile, incompleteArrJobProfile, isChosen, jobProfilePayload } from '@/utils/requestProfiles.js';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
 import { jobRequiresApproval } from '@/utils/requestApproval.js';
@@ -399,7 +428,9 @@ export default {
     /** Global REQUIRE_REQUEST_APPROVAL, shown on the "Use global setting" delivery option; null when unknown. */
     requestApprovalDefault: { type: [Boolean, String], default: null },
     /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
-    approvalPauseDefault: { type: Boolean, default: null }
+    approvalPauseDefault: { type: Boolean, default: null },
+    /** REQUEST_BACKEND: with 'arr' the per-job profiles and the pending-request pause refer to Radarr/Sonarr. */
+    requestBackend: { type: String, default: 'seer' }
   },
   emits: ['close', 'save'],
   setup() { const { currentUser } = useAuth(); return { currentUser }; },
@@ -435,9 +466,9 @@ export default {
       profilesOpen: false,
       activeSection: 'source',
       sectionClass: 'scroll-mt-2 border-b border-edge py-7 last:border-b-0',
-      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[15px] font-bold text-ink',
+      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[0.9375rem] font-bold text-ink',
       sectionNumberClass: 'grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink',
-      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-2',
+      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2',
       disclosureClass: 'flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-4 py-3 text-left hover:border-ink-4',
       jobTypes: [
         { value: 'list_import', label: 'Import list', description: 'Public MDBList or Trakt list', icon: 'fas fa-list' },
@@ -460,7 +491,8 @@ export default {
       traktConfigured: false,
       traktLoading: false,
       radarrServers: [],
-      sonarrServers: []
+      sonarrServers: [],
+      arrOptions: { movie: null, tv: null }
     };
   },
   computed: {
@@ -485,7 +517,7 @@ export default {
       const global = this.requestApprovalDefault === null ? null : jobRequiresApproval({ delivery_mode: 'inherit' }, this.requestApprovalDefault);
       return [
         { value: 'inherit', label: 'Use global setting', hint: global === null ? 'Follow Advanced settings' : global ? 'Currently: approval required' : 'Currently: sent automatically', icon: 'fas fa-sliders' },
-        { value: 'automatic', label: 'Send automatically', hint: 'Request in Seer right away', icon: 'fas fa-paper-plane' },
+        { value: 'automatic', label: 'Send automatically', hint: this.requestBackend === 'arr' ? 'Add to Radarr/Sonarr right away' : 'Request in Seer right away', icon: 'fas fa-paper-plane' },
         { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
       ];
     },
@@ -530,8 +562,11 @@ export default {
       return 'Most suggestions requested each run, across all monitored users (1–100).';
     },
     profilesSummary() {
-      const set = this.visibleProfileTypes.filter(type => this.form.request_profiles[type]?.serverId);
-      if (!set.length) return "Using Seer's default server, quality profile and root folder.";
+      const set = this.visibleProfileTypes.filter(type => hasJobProfile(this.form.request_profiles[type], this.requestBackend));
+      if (!set.length) {
+        return this.requestBackend === 'arr' ? 'Using the default quality profile, root folder and tags from Services.'
+          : "Using Seer's default server, quality profile and root folder.";
+      }
       return `Custom ${set.map(type => (type === 'movie' ? 'Radarr' : 'Sonarr')).join(' and ')} profile.`;
     },
     sections() {
@@ -594,6 +629,9 @@ export default {
       if (this.form.prevent_suggestions_if_unwatched && !(this.form.unwatched_suggestion_days >= 1)) return 'Days before pausing must be at least 1.';
       if (!(this.form.max_requests_per_user >= 0 && this.form.max_requests_per_user <= 1000)) return 'Per-user limit must be between 0 and 1000.';
       if (!(this.form.request_limit_window_hours >= 1 && this.form.request_limit_window_hours <= 8760)) return 'Limit window must be between 1 and 8760 hours.';
+      if (this.requestBackend === 'arr' && this.visibleProfileTypes.some(type => incompleteArrJobProfile(this.form.request_profiles[type]))) {
+        return 'Choose a root folder for the Radarr/Sonarr profile, or set the quality profile back to the default.';
+      }
       return '';
     },
     isValid() {
@@ -627,7 +665,7 @@ export default {
         type: this.job.schedule_type || 'preset',
         value: this.job.schedule_value || 'daily'
       };
-      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => profile.serverId);
+      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => hasJobProfile(profile, this.requestBackend));
     }
     // Ready for Escape and edits before the slower loads below (Seer can take seconds).
     this.pristine = this.snapshot();
@@ -662,6 +700,16 @@ export default {
       this.llmConfigured = false;
     }
     await this.refreshTraktSetup();
+    if (this.requestBackend === 'arr') {
+      // Each instance on its own: one missing or unreachable must not hide the other.
+      const [radarr, sonarr] = await Promise.allSettled([getSavedArrOptionsApi('radarr'), getSavedArrOptionsApi('sonarr')]);
+      const options = (result) => {
+        const data = result.status === 'fulfilled' ? result.value?.data : null;
+        return data ? { profiles: data.profiles || [], rootFolders: data.rootFolders || [], tags: data.tags || [] } : null;
+      };
+      this.arrOptions = { movie: options(radarr), tv: options(sonarr) };
+      return;
+    }
     try {
       const [radarr, sonarr] = await Promise.all([axios.get('/api/seer/radarr-servers'), axios.get('/api/seer/sonarr-servers')]);
       this.radarrServers = radarr.data.servers || [];
@@ -734,13 +782,7 @@ export default {
         media_type: this.form.media_type,
         delivery_mode: this.form.delivery_mode,
         seer_identity_mode: this.form.seer_identity_mode,
-        request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type,
-          profile.serverId !== '' && profile.serverId != null && profile.profileId !== '' && profile.profileId != null && profile.rootFolder ? {
-            serverId: Number(profile.serverId), profileId: Number(profile.profileId), rootFolder: profile.rootFolder,
-            is4k: profile.is4k === true,
-            ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
-          } : {}
-        ]))
+        request_profiles: this.requestProfilesPayload()
       };
     },
     async previewList(more = false) {
@@ -786,6 +828,23 @@ export default {
           ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink'
           : 'border-edge-strong bg-panel-2 text-ink-2 hover:enabled:border-ink-4 hover:enabled:text-ink [&>i]:text-ink-4',
       ];
+    },
+    requestProfilesPayload() {
+      return Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type, jobProfilePayload(profile, this.requestBackend)]));
+    },
+    // Direct delivery: a stored Seer profile (serverId) is only replaced once a Radarr/Sonarr value is chosen.
+    arrField(type, key) {
+      const profile = this.form.request_profiles[type] || {};
+      return isChosen(profile.serverId) ? '' : (profile[key] ?? '');
+    },
+    setArrField(type, key, value) {
+      const profile = this.form.request_profiles[type] || {};
+      const base = isChosen(profile.serverId) ? {} : profile;
+      this.form.request_profiles[type] = key === 'profileId' && value === '' ? {} : { rootFolder: '', tags: [], ...base, [key]: value };
+    },
+    toggleArrTag(type, tagId) {
+      const tags = this.form.request_profiles[type].tags || [];
+      this.form.request_profiles[type] = { ...this.form.request_profiles[type], tags: tags.includes(tagId) ? tags.filter(id => id !== tagId) : [...tags, tagId] };
     },
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
@@ -866,16 +925,7 @@ export default {
       try {
         const jobData = {
           ...this.form,
-          request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [
-            type,
-            profile.serverId && profile.profileId && profile.rootFolder ? {
-              serverId: Number(profile.serverId),
-              profileId: Number(profile.profileId),
-              rootFolder: profile.rootFolder,
-              is4k: profile.is4k === true,
-              ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
-            } : {}
-          ])),
+          request_profiles: this.requestProfilesPayload(),
           schedule_type: this.schedule.type,
           schedule_value: this.schedule.value
         };

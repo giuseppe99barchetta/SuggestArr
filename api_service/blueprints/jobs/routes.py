@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role, require_tab
-from api_service.config.config import load_env_vars
+from api_service.config.config import get_request_backend, load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.utils import request_scope
@@ -27,6 +27,7 @@ from api_service.jobs.trakt_recommendations_automation import (
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.utils.request_profiles import (
     validate_request_profiles,
+    validate_request_profiles_with_arr,
     validate_request_profiles_with_seer,
 )
 
@@ -44,6 +45,30 @@ def run_async(coro):
     Drains pending cleanup tasks before closing the per-invocation event loop.
     """
     return run_coroutine_sync(coro, logger)
+
+
+def _localize_preview(items):
+    """
+    Show dry-run items in the reader's display language, like the request lists.
+
+    Best effort: any failure keeps the default-language items, so a preview
+    never fails because of localization.
+
+    Args:
+        items: Dry-run item dicts (tmdb_id, media_type, title, overview), changed in place.
+
+    Returns:
+        list: The same items.
+    """
+    if not items:
+        return items
+    try:
+        from api_service.blueprints.automation.routes import _localize
+        from api_service.db.database_manager import DatabaseManager
+        _localize(DatabaseManager(), (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
+    except Exception as exc:
+        logger.warning("Preview localization skipped: %s", exc)
+    return items
 
 
 def _validate_request_limits(data):
@@ -108,6 +133,44 @@ def _foreign_user_ids_error(job_type, user_ids, current_user, require_link=False
     return None
 
 
+def _history_limit(default: int) -> int:
+    """
+    Read the ``limit`` query parameter for history lists, clamped to 1..500.
+
+    A negative LIMIT means "no limit" on SQLite and is an error on PostgreSQL/MySQL.
+
+    Args:
+        default: Value used when the parameter is missing or not a number.
+
+    Returns:
+        int: The clamped limit.
+    """
+    return min(max(request.args.get('limit', default, type=int), 1), 500)
+
+
+def _schedule_error(schedule_type, schedule_value):
+    """
+    Check that a schedule can be turned into a trigger before it is saved.
+
+    An invalid schedule must be refused here: ``JobManager.schedule_job`` removes
+    the old trigger before it parses the new one, so saving it would silently stop the job.
+
+    Args:
+        schedule_type: 'preset' or 'cron'.
+        schedule_value: Preset name or cron expression.
+
+    Returns:
+        str | None: An error message, or None when the schedule is valid.
+    """
+    if schedule_type not in ('preset', 'cron'):
+        return 'schedule_type must be "preset" or "cron"'
+    if not isinstance(schedule_value, str) or not schedule_value.strip():
+        return 'schedule_value must be a non-empty string'
+    if JobManager.get_instance()._create_trigger(schedule_type, schedule_value) is None:
+        return 'Invalid schedule'
+    return None
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -126,6 +189,21 @@ def get_job_manager() -> JobManager:
     if 'list_import' not in manager._job_executors:
         manager.set_job_executor(execute_list_import_job, job_type='list_import')
     return manager
+
+
+def _validate_job_profiles(profiles):
+    """Check job request profiles against the backend that will use them.
+
+    Seer-shape profiles (with serverId) are checked against Seer, Radarr/Sonarr-shape ones against
+    Radarr/Sonarr with direct delivery. The other shape is ignored by the active backend, so it is
+    neither checked (that service may not be configured) nor altered.
+    """
+    env = ConfigService.get_runtime_config()
+    if get_request_backend(env) == 'arr':
+        validate_request_profiles_with_arr(profiles, env)
+    else:
+        validate_request_profiles_with_seer(profiles)
+
 
 
 @jobs_bp.route('/lists/verify', methods=['POST'])
@@ -166,7 +244,7 @@ def _list_import_config(data):
         raise PublicListError('Admin Seer identity requires an administrator.')
     try:
         config['request_profiles'] = validate_request_profiles(config.get('request_profiles'))
-        validate_request_profiles_with_seer(config['request_profiles'])
+        _validate_job_profiles(config['request_profiles'])
     except ValueError as exc:
         raise PublicListError(str(exc)) from None
     return config
@@ -193,7 +271,7 @@ def preview_public_list():
         result = run_async(preview())
         if not result.success:
             return jsonify({'status': 'error', 'message': result.error_message}), 502
-        return jsonify({'status': 'success', 'items': result.dry_run_items or [],
+        return jsonify({'status': 'success', 'items': _localize_preview(result.dry_run_items or []),
                         'scanned_count': result.results_count, 'next_offset': automation.next_offset,
                         'has_more': not automation.scan_complete}), 200
     except PublicListError as exc:
@@ -284,6 +362,7 @@ def get_jobs():
             'status': 'success',
             'jobs': jobs,
             'request_approval_default': env_vars.get('REQUIRE_REQUEST_APPROVAL', False),
+            'request_backend': get_request_backend(env_vars),
             'approval_pause_default': env_vars.get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True,
         }), 200
     except Exception as e:
@@ -472,7 +551,7 @@ def create_job():
         data['approval_pause_mode'] = approval_pause_mode
         try:
             data['request_profiles'] = validate_request_profiles(data.get('request_profiles'))
-            validate_request_profiles_with_seer(data['request_profiles'])
+            _validate_job_profiles(data['request_profiles'])
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
         identity_mode = data.get('seer_identity_mode', 'technical_user')
@@ -517,12 +596,9 @@ def create_job():
         if scope_error:
             return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
 
-        # Validate schedule_type
-        if data['schedule_type'] not in ['preset', 'cron']:
-            return jsonify({
-                'status': 'error',
-                'message': 'schedule_type must be "preset" or "cron"'
-            }), 400
+        schedule_error = _schedule_error(data['schedule_type'], data['schedule_value'])
+        if schedule_error:
+            return jsonify({'status': 'error', 'message': schedule_error}), 400
 
         # Create job
         repository = JobRepository()
@@ -581,7 +657,7 @@ def update_job(job_id: int):
         if 'request_profiles' in data:
             try:
                 data['request_profiles'] = validate_request_profiles(data['request_profiles'])
-                validate_request_profiles_with_seer(data['request_profiles'])
+                _validate_job_profiles(data['request_profiles'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
         if 'delivery_mode' in data and data['delivery_mode'] not in ('inherit', 'automatic', 'manual'):
@@ -640,12 +716,13 @@ def update_job(job_id: int):
         if scope_error:
             return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
 
-        # Validate schedule_type if provided
-        if 'schedule_type' in data and data['schedule_type'] not in ['preset', 'cron']:
-            return jsonify({
-                'status': 'error',
-                'message': 'schedule_type must be "preset" or "cron"'
-            }), 400
+        if 'schedule_type' in data or 'schedule_value' in data:
+            schedule_error = _schedule_error(
+                data.get('schedule_type', existing.get('schedule_type')),
+                data.get('schedule_value', existing.get('schedule_value')),
+            )
+            if schedule_error:
+                return jsonify({'status': 'error', 'message': schedule_error}), 400
 
         # Update job
         updated = repository.update_job(job_id, data)
@@ -773,12 +850,23 @@ def toggle_job(job_id: int):
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+def _wants_force() -> bool:
+    """True when the caller asked to skip the pauses (``?force=true`` or ``{"force": true}``)."""
+    if request.args.get('force', '').lower() in ('1', 'true', 'yes'):
+        return True
+    body = request.get_json(silent=True)
+    return isinstance(body, dict) and body.get('force') is True
+
+
 @jobs_bp.route('/<int:job_id>/run', methods=['POST'])
 @limiter.limit("5 per minute")
 def run_job_now(job_id: int):
     """
-    Execute a job immediately.
-    
+    Execute a job immediately, with the same rules as a scheduled run.
+
+    The pauses (approvals waiting, Seer/Radarr/Sonarr queue, unwatched suggestions) apply, and so does
+    the one-run-at-a-time rule. ``force`` ("Run anyway") skips the pauses only.
+
     Admin users can run any job.
     Normal users can only run jobs they own.
 
@@ -786,7 +874,8 @@ def run_job_now(job_id: int):
         job_id: ID of the job to run.
 
     Returns:
-        JSON with execution result.
+        JSON with execution result, ``paused`` (with the reason) when a pause applies and force was not
+        given, or 409 when the job is already running.
     """
     try:
         repository = JobRepository()
@@ -795,7 +884,7 @@ def run_job_now(job_id: int):
         job = repository.get_job(job_id)
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
-        
+
         # Apply RBAC: non-admin users can only run their own jobs
         current_user = getattr(g, 'current_user', None)
         if current_user and current_user.get('role') != 'admin':
@@ -804,50 +893,42 @@ def run_job_now(job_id: int):
                 return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         job_type = job.get('job_type', 'discover')
-        logger.info(f"Running {job_type} job {job_id} immediately")
+        force = _wants_force()
+        logger.info(f"Running {job_type} job {job_id} immediately (force={force})")
 
         manager = get_job_manager()
-        if run_async(manager._should_pause_for_pending_requests(job)):
+        if not manager.try_reserve(job_id):
+            return jsonify({'status': 'busy', 'message': 'This job is already running.'}), 409
+        # The reservation is released by _execute_job, whatever the outcome.
+        try:
             exec_id = repository.log_execution_start(job_id)
-            repository.log_execution_end(
-                exec_id=exec_id,
-                status='skipped',
-                results_count=0,
-                requested_count=0,
-                error_message='Paused: Seer has pending requests awaiting approval or denial.'
-            )
+        except Exception:
+            manager.release(job_id)
+            raise
+        report = manager._execute_job(job_id, execution_id=exec_id, force=force, reserved=True)
+
+        if report['status'] == 'skipped':
+            reason = report.get('reason') or 'a pause applies'
             return jsonify({
                 'status': 'paused',
-                'message': 'Job paused because Seer has pending requests awaiting approval or denial.',
+                'reason': reason,
+                'message': f'Job paused: {reason}.',
                 'results_count': 0,
-                'requested_count': 0
+                'requested_count': 0,
+                'run_id': exec_id,
             }), 200
-
-        exec_id = repository.log_execution_start(job_id)
-
-        # Execute job based on type (async function called synchronously)
-        if job_type == 'recommendation':
-            result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
-        elif job_type == 'trakt_recommendations':
-            result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
-        elif job_type == 'list_import':
-            result = run_async(execute_list_import_job(job_id, execution_id=exec_id))
-        else:
-            result = run_async(execute_discover_job(job_id, execution_id=exec_id))
-
-        if result.success:
+        if report['status'] == 'completed' and report.get('success'):
             return jsonify({
                 'status': 'success',
                 'message': 'Job executed successfully',
-                'results_count': result.results_count,
-                'requested_count': result.requested_count,
+                'results_count': report['results_count'],
+                'requested_count': report['requested_count'],
                 'run_id': exec_id,
             }), 200
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': result.error_message or 'Job execution failed'
-            }), 500
+        return jsonify({
+            'status': 'error',
+            'message': report.get('error_message') or report.get('reason') or 'Job execution failed'
+        }), 500
 
     except Exception as e:
         logger.error(f"Error running job {job_id}: {e}", exc_info=True)
@@ -908,7 +989,7 @@ def dry_run_job(job_id: int):
                 'status': 'success',
                 'dry_run': True,
                 'items_count': result.results_count,
-                'items': result.dry_run_items or [],
+                'items': _localize_preview(result.dry_run_items or []),
             }), 200
         else:
             return jsonify({
@@ -921,46 +1002,27 @@ def dry_run_job(job_id: int):
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
-def _run_all_jobs_in_background():
+def _run_all_jobs_in_background(force: bool = False):
     """
-    Run all enabled jobs sequentially in a background thread.
-    Each job is executed with its own event loop to avoid conflicts.
+    Run all enabled jobs sequentially in a background thread, with the same rules as a scheduled run.
+    Each job is executed with its own event loop to avoid conflicts; a job already running is skipped.
+
+    Args:
+        force: Skip the pauses ("Run anyway") for every job.
     """
     global _run_all_running
     try:
         repository = JobRepository()
+        manager = get_job_manager()
         jobs = [j for j in repository.get_all_jobs() if j.get('enabled', True)]
         logger.info(f"Force run all: executing {len(jobs)} job(s)")
 
         for job in jobs:
             job_id = job['id']
-            job_type = job.get('job_type', 'discover')
             try:
-                logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
-                manager = get_job_manager()
-                if run_async(manager._should_pause_for_pending_requests(job)):
-                    exec_id = repository.log_execution_start(job_id)
-                    repository.log_execution_end(
-                        exec_id=exec_id,
-                        status='skipped',
-                        results_count=0,
-                        requested_count=0,
-                        error_message='Paused: Seer has pending requests awaiting approval or denial.'
-                    )
-                    logger.info(
-                        "Force run all: paused job %s because Seer has pending requests.",
-                        job_id,
-                    )
-                    continue
-                if job_type == 'recommendation':
-                    run_async(execute_recommendation_job(job_id))
-                elif job_type == 'trakt_recommendations':
-                    run_async(execute_trakt_recommendations_job(job_id))
-                elif job_type == 'list_import':
-                    run_async(execute_list_import_job(job_id))
-                else:
-                    run_async(execute_discover_job(job_id))
-                logger.info(f"Force run all: job {job_id} completed")
+                logger.info(f"Force run all: starting {job.get('job_type', 'discover')} job {job_id} ({job.get('name', '')})")
+                report = manager._execute_job(job_id, force=force)
+                logger.info(f"Force run all: job {job_id} {report.get('status')}")
             except Exception as e:
                 logger.error(f"Force run all: error in job {job_id}: {e}", exc_info=True)
 
@@ -996,13 +1058,18 @@ def run_all_jobs():
             _run_all_running = False
         return jsonify({'status': 'error', 'message': 'No enabled jobs found.'}), 404
 
-    thread = threading.Thread(target=_run_all_jobs_in_background, daemon=True)
+    manager = get_job_manager()
+    # Snapshot at request time of the jobs already running; each job is still reserved when its turn comes,
+    # so one that finishes meanwhile may run and one that starts meanwhile is skipped.
+    busy_jobs = [j['id'] for j in jobs if manager.is_running(j['id'])]
+    thread = threading.Thread(target=_run_all_jobs_in_background, kwargs={'force': _wants_force()}, daemon=True)
     thread.start()
 
     return jsonify({
         'status': 'success',
-        'message': f'Running {len(jobs)} job(s) in the background.',
-        'jobs_count': len(jobs)
+        'message': f'Running {len(jobs) - len(busy_jobs)} job(s) in the background.',
+        'jobs_count': len(jobs),
+        'busy_jobs': busy_jobs,
     }), 202
 
 
@@ -1034,7 +1101,7 @@ def get_job_history(job_id: int):
             if job.get('owner_id') != user_id:
                 return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
-        limit = request.args.get('limit', 50, type=int)
+        limit = _history_limit(50)
         history = repository.get_job_history(job_id, limit)
 
         return jsonify({
@@ -1061,21 +1128,12 @@ def get_all_history():
     """
     try:
         repository = JobRepository()
-        limit = request.args.get('limit', 100, type=int)
-        history = repository.get_recent_history(limit)
-
+        limit = _history_limit(100)
         current_user = getattr(g, 'current_user', None)
+        owner_id = None
         if current_user and current_user.get('role') != 'admin':
-            user_id = int(current_user['id'])
-            owned_job_ids = {
-                job['id']
-                for job in repository.get_all_jobs()
-                if job.get('owner_id') == user_id
-            }
-            history = [
-                item for item in history
-                if item.get('job_id') in owned_job_ids
-            ]
+            owner_id = int(current_user['id'])
+        history = repository.get_recent_history(limit, owner_id=owner_id)
 
         return jsonify({'status': 'success', 'history': history}), 200
 
@@ -1301,6 +1359,7 @@ def get_queue_status():
           - submitted:  items successfully delivered this session
           - failed:     items that exhausted retries
           - total_pending: queued + submitting (items not yet delivered)
+          - unavailable_since: when a delivery backend was first found unreachable, or null
     """
     try:
         from api_service.db.database_manager import DatabaseManager
@@ -1313,6 +1372,11 @@ def get_queue_status():
             rows = cursor.fetchall()
 
         counts = {row[0]: row[1] for row in rows}
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MIN(unavailable_since) FROM pending_requests "
+                           "WHERE status = 'queued' AND unavailable_since IS NOT NULL")
+            unavailable_since = cursor.fetchone()[0]
         queued = counts.get('queued', 0)
         submitting = counts.get('submitting', 0)
         submitted = counts.get('submitted', 0)
@@ -1325,6 +1389,8 @@ def get_queue_status():
             'submitted': submitted,
             'failed': failed,
             'total_pending': queued + submitting,
+            # Oldest time a queued row found its backend unreachable; None while deliveries work.
+            'unavailable_since': unavailable_since.isoformat() if hasattr(unavailable_since, 'isoformat') else unavailable_since,
         }), 200
     except Exception as e:
         logger.error(f"Error retrieving queue status: {e}", exc_info=True)
@@ -1341,7 +1407,11 @@ def get_llm_status():
     """
     try:
         from api_service.services.llm.llm_service import get_llm_client
-        client = get_llm_client()
+        try:
+            caller = int(g.current_user['id'])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            caller = None  # no person behind the request: only the shared provider counts
+        client = get_llm_client(caller)
         config = load_env_vars()
         advanced_enabled = config.get('ENABLE_ADVANCED_ALGORITHM', False) is True
         return jsonify({

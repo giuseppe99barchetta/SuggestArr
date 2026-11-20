@@ -1,7 +1,7 @@
 <template>
   <span
     class="inline-grid shrink-0 place-items-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
-    :class="[state.tone, small ? 'h-5 w-5 text-[9px]' : 'h-6 w-6 text-[11px]']"
+    :class="[state.tone, small ? 'h-5 w-5 text-[0.5625rem]' : 'h-6 w-6 text-[0.6875rem]']"
     :title="state.label"
   >
     <i aria-hidden="true" :class="state.icon"></i>

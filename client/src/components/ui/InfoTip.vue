@@ -3,7 +3,7 @@
     <button
       ref="trigger"
       type="button"
-      class="grid h-5 w-5 cursor-help place-items-center rounded-full border-0 bg-transparent p-0 text-[12px] text-ink-4 hover:text-brand-ink focus-visible:text-brand-ink"
+      class="grid h-5 w-5 cursor-help place-items-center rounded-full border-0 bg-transparent p-0 text-[0.75rem] text-ink-4 hover:text-brand-ink focus-visible:text-brand-ink"
       :aria-label="label"
       :aria-describedby="open ? tipId : null"
       @focus="show"

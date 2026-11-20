@@ -426,13 +426,11 @@ def test_config_secret_registration():
     from api_service.config.config import INTEGRATION_TO_FLAT, get_default_values, get_config_sections
     from api_service.services.config_secrets import redact_settings
     from api_service.services.config_service import _DB_INTEGRATION_KEYS
-    from api_service.blueprints.config.routes import _redact_config
     assert 'MDBLIST_API_KEY' in get_default_values()
     assert 'MDBLIST_API_KEY' in get_config_sections()['services']
     assert INTEGRATION_TO_FLAT['mdblist'] == {'api_key': 'MDBLIST_API_KEY'}
     assert 'MDBLIST_API_KEY' in _DB_INTEGRATION_KEYS
     assert redact_settings({'MDBLIST_API_KEY': 'secret'})['MDBLIST_API_KEY'] == '***'
-    assert _redact_config({'MDBLIST_API_KEY': 'secret'})['MDBLIST_API_KEY'] != 'secret'
 
 
 def test_config_db_merge_migration_export_and_masked_import(monkeypatch):

@@ -118,7 +118,8 @@ def test_explicit_credentials_keep_precedence(proxy_app):
         result = client.get('/api/protected', headers={'Authorization': 'Bearer invalid'},
                             environ_base={'REMOTE_ADDR': '192.168.1.5'})
         assert result.status_code == 401
-        with patch.object(AuthService, 'verify_access_token', return_value={'sub': '2', 'role': 'user'}):
+        account = {'id': 2, 'username': 'u', 'role': 'user', 'is_active': True}
+        with patch.object(AuthService, 'verify_access_token', return_value={'sub': '2', 'role': 'user'}),                 patch('api_service.auth.middleware._load_token_account', return_value=account):
             result = client.get('/api/protected', headers={'Authorization': 'Bearer valid'})
             assert result.status_code == 200
             assert result.json['user']['role'] == 'user'

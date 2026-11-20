@@ -7,7 +7,7 @@ through a *verified* media link only — and stored.
 """
 import json
 import sqlite3
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 
 import pytest
 from flask import Flask, g
@@ -45,7 +45,8 @@ def _queue():
         CREATE TABLE pending_requests (id INTEGER PRIMARY KEY, tmdb_id TEXT, media_type TEXT, user_id TEXT,
             payload TEXT, status TEXT, retry_count INTEGER DEFAULT 0, last_attempt_at TIMESTAMP,
             next_attempt_at TIMESTAMP, job_id INTEGER, execution_id INTEGER, owner_id INTEGER,
-            decided_at TIMESTAMP, decided_by INTEGER, last_error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+            decided_at TIMESTAMP, decided_by INTEGER, last_error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            unavailable_since TIMESTAMP);
         CREATE TABLE metadata (media_id TEXT, media_type TEXT, title TEXT, poster_path TEXT, overview TEXT,
             rating REAL, release_date TEXT, logo_path TEXT, backdrop_path TEXT);
         CREATE TABLE discover_jobs (id INTEGER PRIMARY KEY, name TEXT);
@@ -54,6 +55,8 @@ def _queue():
         CREATE TABLE user_media_profiles (external_user_id TEXT, external_username TEXT);
         CREATE TABLE suggestion_blacklist (tmdb_id TEXT, media_type TEXT, created_by INTEGER,
             PRIMARY KEY (tmdb_id, media_type));
+        CREATE TABLE request_replacements (delivery_id INTEGER PRIMARY KEY, remote_status INTEGER, status TEXT,
+            reason TEXT, replacement_delivery_id INTEGER, checked_at TIMESTAMP);
     """)
     rows = [
         # id, tmdb, status, owner (as stored when queued), _user_id
@@ -344,7 +347,7 @@ def test_an_admin_under_own_all_approves_their_own_and_unassigned(monkeypatch):
     response = client.post('/api/automation/requests/workflow/approve', json={'ids': [1, 3], 'profile': profile})
     assert response.status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True)
+        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True, report=ANY, replace_rejected=False)
 
 
 def test_an_admin_under_own_all_lists_their_own_and_unassigned(monkeypatch):
@@ -364,4 +367,28 @@ def test_a_regular_user_approves_only_what_they_own(monkeypatch):
     client = _client(monkeypatch, USER, 'own', db)
     assert client.post('/api/automation/requests/workflow/approve', json={'ids': [2]}).status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False)
+        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False, report=ANY, replace_rejected=False)
+
+
+def test_the_pending_snapshot_follows_the_same_rule_and_reports_truncation(monkeypatch):
+    db = _db([ROBERT])
+    monkeypatch.setattr(automation_routes, '_ALL_PENDING_MAX', 2)
+    db.list_suggestions.return_value = ([{'id': n, 'tmdb_id': str(n), 'media_type': 'movie'} for n in (1, 2, 3)], 0)
+    client = _client(monkeypatch, USER, 'own', db)
+    response = client.get('/api/automation/requests/workflow/pending?media_type=movie&search=dune')
+    assert response.status_code == 200
+    assert [item['id'] for item in response.json['items']] == [1, 2]
+    assert response.json['truncated'] is True
+    args = db.list_suggestions.call_args[0]
+    assert args[:6] == (ROBERT_ID, 'awaiting_approval', 'dune', 1, 3, 'movie')  # cap + 1 rows, one query
+    assert args[6] == [ROBERT] and args[7] is None and args[8] is False
+
+    db.list_suggestions.return_value = ([{'id': n, 'tmdb_id': str(n), 'media_type': 'movie'} for n in (1, 2)], 99)
+    response = client.get('/api/automation/requests/workflow/pending')
+    assert [item['id'] for item in response.json['items']] == [1, 2]
+    assert response.json['truncated'] is False  # decided by the rows, not the separate count
+
+
+def test_the_pending_snapshot_rejects_an_unknown_media_type(monkeypatch):
+    client = _client(monkeypatch, ADMIN, 'all', _db([]))
+    assert client.get('/api/automation/requests/workflow/pending?media_type=music').status_code == 400

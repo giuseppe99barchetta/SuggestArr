@@ -7,8 +7,8 @@
     <p v-if="disabled" class="mt-2 text-xs text-ink-4">Save your changes before running expiry.</p>
     <p v-if="summary" role="status" class="mt-3 text-sm text-ink-2">{{ summary }}</p>
     <details class="group mt-3 rounded-ctl border border-edge">
-      <summary class="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
-        <i aria-hidden="true" class="fas fa-chevron-right text-[10px] text-ink-4 group-open:rotate-90"></i>
+      <summary class="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-[0.8125rem] font-semibold text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+        <i aria-hidden="true" class="fas fa-chevron-right text-[0.625rem] text-ink-4 group-open:rotate-90"></i>
         Activity log
         <span class="ml-auto text-xs font-normal tabular-nums text-ink-4">{{ log.length }} recent</span>
       </summary>

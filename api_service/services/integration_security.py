@@ -32,7 +32,7 @@ def public_arr_servers(servers):
 def bind_flat_credentials(incoming, existing):
     """Validate before placeholder merging or persistence can reuse old secrets."""
     result = dict(incoming)
-    for prefix in ('PLEX', 'JELLYFIN', 'SEER'):
+    for prefix in ('PLEX', 'JELLYFIN', 'SEER', 'RADARR', 'SONARR'):
         url_key, token_key = f'{prefix}_API_URL', f'{prefix}_TOKEN'
         if (prefix == 'SEER' and existing.get(token_key) and token_key in result
                 and result[token_key] != '***' and result[token_key] != existing.get(token_key)):

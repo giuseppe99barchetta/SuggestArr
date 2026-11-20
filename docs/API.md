@@ -109,6 +109,11 @@ secret from `X-SuggestArr-Signature`; the timestamp and event identifiers are
 provided by `X-SuggestArr-Timestamp`, `X-SuggestArr-Event`, and
 `X-SuggestArr-Event-Id`.
 
+When a suggestion has an AI rationale, `suggestion.created`,
+`suggestion.awaiting_approval` and `request.submitted` include it as
+`data.rationale`. Discord, ntfy and Telegram notifications show it on a second
+line, shortened to 500 characters.
+
 Webhook URLs are SSRF-validated. Private-network destinations are rejected by
 default; set `allow_private: true` only for trusted local automation such as
 Home Assistant or n8n.

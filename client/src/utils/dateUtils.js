@@ -18,7 +18,7 @@ export function formatDate(dateString) {
   const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const diffTime = nowOnly - dateOnly;
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)); // round: a DST day is 23 or 25 hours
 
   if (diffDays === 0) return 'today';
   if (diffDays === 1) return 'yesterday';

@@ -97,6 +97,7 @@ class TestCleanupAbortsWhenFavoritesUnreadable(unittest.IsolatedAsyncioTestCase)
         with patch.object(cleanup_automation, "DatabaseManager", return_value=FakeDB()),              patch.object(cleanup_automation, "JellyfinClient", FakeJellyfin),              patch.object(cleanup_automation, "SeerClient") as seer,              patch.object(cleanup_automation.ConfigService, "get_runtime_config", return_value={
                  "SELECTED_SERVICE": "jellyfin", "JELLYFIN_API_URL": "http://jf", "JELLYFIN_TOKEN": "t",
                  "SELECTED_USERS": [{"id": "u1", "name": "Ann"}],
+                 "SEER_API_URL": "http://seer", "SEER_TOKEN": "s",
              }):
             result = await cleanup_automation.execute_cleanup_job()
 

@@ -19,9 +19,11 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from urllib.parse import urlparse
 
 import aiohttp
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
+from api_service.services.http.public_only_transport import PublicOnlyTransport
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import integration_error
 from api_service.exceptions.api_exceptions import LLMValidationError
@@ -66,6 +68,8 @@ _LEGACY_TEMPERATURE = "legacy"
 _UNSET_TEMPERATURE = "unset"
 _REASONING_EFFORTS = {"low", "medium", "high"}
 _SEARXNG_TIMEOUT_SECONDS = 5
+# The SDK waits ten minutes per call by default; a provider that stops answering must not hold a job that long.
+_LLM_TIMEOUT_SECONDS = 120
 _SEARXNG_MAX_RESULTS = 3
 
 
@@ -73,45 +77,68 @@ _SEARXNG_MAX_RESULTS = 3
 # Client factory
 # ---------------------------------------------------------------------------
 
+def personal_llm_settings(user_id: Optional[int]) -> Optional[Dict[str, str]]:
+    """Return the AI provider a person set up for themselves, or None.
+
+    It only counts while the account is active and still allowed to manage AI (an administrator, or an
+    account with ``can_manage_ai``): taking the permission away puts the person back on the shared provider.
+
+    :param user_id: SuggestArr account id, or None for work that has no person behind it (scheduled jobs).
+    :return: ``{'api_key', 'base_url', 'model'}`` (empty strings when not set), or None.
+    """
+    if user_id is None:
+        return None
+    try:
+        from api_service.db.database_manager import DatabaseManager
+        db = DatabaseManager()
+        account = db.get_auth_user_by_id(int(user_id))
+        if not account or not account.get("is_active") or not (
+                account.get("role") == "admin" or account.get("can_manage_ai")):
+            return None
+        token = db.get_user_media_profile_token(int(user_id), "openai")
+        stored = json.loads(token) if token else None
+    except Exception as exc:
+        logger.warning("Could not load the personal AI provider of user %s: %s", user_id, exc)
+        return None
+    if not isinstance(stored, dict):
+        return None
+    settings = {key: str(stored.get(key) or "").strip() for key in ("api_key", "base_url", "model")}
+    # Only an administrator may reach a private address; for everyone else the connection itself is
+    # restricted to public addresses (see get_llm_client), not just checked once here.
+    settings["public_only"] = bool(settings["base_url"]) and account.get("role") != "admin"
+    return settings if settings["api_key"] or settings["base_url"] else None
+
+
+def llm_runtime_config(user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Runtime config with the person's own provider applied, when they have one.
+
+    A personal provider replaces the shared one as a whole (key and address together), so the
+    administrator's key is never sent to an address a person chose.
+    """
+    config = dict(ConfigService.get_runtime_config())
+    personal = personal_llm_settings(user_id)
+    if personal:
+        config["OPENAI_API_KEY"] = personal["api_key"]
+        config["OPENAI_BASE_URL"] = personal["base_url"]
+        config["_LLM_PUBLIC_ONLY"] = personal["public_only"]
+        if personal["model"]:
+            config["LLM_MODEL"] = personal["model"]
+    return config
+
+
 def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
     """Initialize and return the OpenAI-compatible async client if configured.
-    
-    Checks for user-specific OpenAI config first (if user_id provided and user has
-    can_manage_ai permission), then falls back to global admin config.
 
-    :param user_id: Optional user ID to check for per-user OpenAI config
+    The person's own provider is used when they have one (see :func:`personal_llm_settings`);
+    otherwise the provider the administrator set up for everyone.
+
+    :param user_id: Optional account id whose personal provider takes precedence.
     :return: Configured :class:`AsyncOpenAI` instance, or ``None`` when the
         provider is not set up.
     """
-    api_key = None
-    base_url = None
-    
-    # Try to load user-specific config first
-    if user_id is not None:
-        try:
-            from api_service.db.database_manager import DatabaseManager
-            db = DatabaseManager()
-            token = db.get_user_media_profile_token(user_id, 'openai')
-            if token:
-                import json
-                try:
-                    user_config = json.loads(token)
-                    api_key = user_config.get('api_key')
-                    base_url = user_config.get('base_url')
-                    if api_key or base_url:
-                        logger.debug(f"Using per-user OpenAI config for user_id={user_id}")
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON in user OpenAI config for user_id={user_id}")
-        except Exception as e:
-            logger.warning(f"Failed to load user OpenAI config for user_id={user_id}: {e}")
-    
-    # Fall back to global config if no user-specific config
-    if not api_key and not base_url:
-        config = ConfigService.get_runtime_config()
-        api_key = config.get("OPENAI_API_KEY")
-        base_url = config.get("OPENAI_BASE_URL")
-        if api_key or base_url:
-            logger.debug("Using global OpenAI config")
+    config = llm_runtime_config(user_id)
+    api_key = config.get("OPENAI_API_KEY")
+    base_url = config.get("OPENAI_BASE_URL")
 
     if not api_key:
         if base_url:
@@ -126,9 +153,13 @@ def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
             return None
 
     try:
-        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key, "timeout": _LLM_TIMEOUT_SECONDS}
         if base_url:
             client_kwargs["base_url"] = base_url
+        if config.get("_LLM_PUBLIC_ONLY"):
+            # An address a person chose: public addresses only, checked on the connection itself, no redirects.
+            client_kwargs["http_client"] = httpx.AsyncClient(
+                transport=PublicOnlyTransport(), follow_redirects=False, timeout=_LLM_TIMEOUT_SECONDS)
         return AsyncOpenAI(**client_kwargs)
     except Exception as exc:
         logger.error("Failed to initialize OpenAI client: %s", exc)
@@ -744,7 +775,9 @@ async def _call_with_validation(
         if response is None:
             raise RuntimeError("LLM request did not return a response")
 
-        raw = response.choices[0].message.content.strip()
+        # A refusal or an empty answer has no text: treat it as an invalid answer, which is retried and then reported.
+        choices = getattr(response, "choices", None) or []
+        raw = ((choices[0].message.content if choices else None) or "").strip()
         content = _extract_json_object(
             _repair_title_qualifiers(_strip_markdown_fences(raw))
         )
@@ -1021,6 +1054,7 @@ async def interpret_search_query(
     liked_titles: Optional[List[Dict]] = None,
     excluded_titles: Optional[List[Dict]] = None,
     people_profiles: Optional[List[Dict]] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Interpret a natural language search query and return structured TMDB parameters.
 
@@ -1036,17 +1070,18 @@ async def interpret_search_query(
     :param people_profiles: ``{'name', 'history', 'taste'}`` for each person the search is for
         (1+). Replaces ``history_items`` and ``liked_titles``; with two or more people the
         prompt asks for titles all of them would enjoy.
+    :param user_id: Account whose personal AI provider is used, when they have one.
     :raises LLMValidationError: When the LLM persistently returns invalid JSON.
     :return: Dict with 'discover_params' and 'suggested_titles', or ``{}`` when
         the LLM is not configured.
     """
-    client = get_llm_client()
+    client = get_llm_client(user_id)
     if not client:
         logger.info("LLM not configured — cannot interpret search query.")
         return {}
 
     try:
-        config = ConfigService.get_runtime_config()
+        config = llm_runtime_config(user_id)
         model = config.get("LLM_MODEL", "gpt-4o-mini")
         max_retries = int(config.get("LLM_MAX_RETRIES", 2))
         generation_settings = _resolve_generation_settings(config, model, legacy_temperature=0.8)
@@ -1189,6 +1224,7 @@ async def generate_search_result_rationales(
     discover_params: Dict[str, Any],
     results: List[Dict[str, Any]],
     people_context: Optional[List[Dict]] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, str]:
     """Generate concise, per-result rationales for AI-search TMDB results.
 
@@ -1198,18 +1234,19 @@ async def generate_search_result_rationales(
     :param results: Final or candidate TMDB result dicts with title/name and optional year.
     :param people_context: ``{'name', 'taste'}`` per person for a group search; each rationale
         must then say, from their ratings only, why the title suits each of them.
+    :param user_id: Account whose personal AI provider is used, when they have one.
     :return: Mapping keyed as ``"{normalized_title}|{year_or_empty}"`` to rationale text.
     """
     if not results:
         return {}
 
-    client = get_llm_client()
+    client = get_llm_client(user_id)
     if not client:
         logger.info("LLM not configured — skipping per-result rationale generation.")
         return {}
 
     try:
-        config = ConfigService.get_runtime_config()
+        config = llm_runtime_config(user_id)
         model = config.get("LLM_MODEL", "gpt-4o-mini")
         max_retries = int(config.get("LLM_MAX_RETRIES", 2))
         generation_settings = _resolve_generation_settings(config, model, legacy_temperature=0.8)

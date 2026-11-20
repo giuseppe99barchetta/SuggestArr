@@ -165,6 +165,7 @@ def test_annual_endpoint_with_production_jwt_middleware_and_own_all(db):
     token = jwt.encode({'sub': '1', 'role': 'admin', 'username': 'test-admin',
                         'exp': datetime.now(timezone.utc) + timedelta(minutes=5)}, key, algorithm='HS256')
     with patch.object(auth_service, 'load_secret_key', return_value=key), \
+            patch.object(middleware, '_load_token_account', return_value={'id': 1, 'username': 'test-admin', 'role': 'admin', 'is_active': True}), \
             patch.object(middleware, 'load_env_vars', return_value={'AUTH_MODE': 'enabled'}), \
             patch.object(middleware, '_is_setup_mode', return_value=False), \
             patch.object(routes, 'DatabaseManager', return_value=db), \

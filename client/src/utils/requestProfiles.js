@@ -2,6 +2,8 @@
 // approving a suggestion. Shared by every place that can approve — the
 // Requests page and the dashboard — so the rules live once.
 
+import { deliveryCounts } from './deliveryTarget.js';
+
 const MEDIA_TYPES = ['movie', 'tv'];
 
 // Jellyseerr numbers its first server 0, so "not chosen" must mean empty or
@@ -22,6 +24,13 @@ export function hasServers(servers) {
 export function approvalNeedsDialog(servers) {
   if (!servers || servers.failed) return true;
   return hasServers(servers);
+}
+
+// Only rows delivered by Seer take a Seer profile. For rows going straight to Radarr/Sonarr
+// there is nothing to choose (they use the job's or Connections' profile), so they are treated
+// like a loaded, empty server list: no dialog, and no "could not be loaded" notice without Seer.
+export function serversForItems(servers, items) {
+  return deliveryCounts(items).seer ? servers : { movie: [], tv: [], failed: false };
 }
 
 // What the dialog says when there is nothing (yet) to choose from.
@@ -92,4 +101,36 @@ export async function loadSeerServers(http) {
     tv: servers(sonarr),
     failed: radarr.status === 'rejected' || sonarr.status === 'rejected',
   };
+}
+
+// A job's per-type profile has two shapes: with serverId it names a Seer server; without it,
+// direct Radarr/Sonarr delivery applies its profileId / rootFolder / tags. The shape the active
+// backend does not use is passed through exactly as stored, so switching back finds it intact.
+export function jobProfilePayload(profile, backend) {
+  const p = profile || {};
+  const forSeer = isChosen(p.serverId);
+  if (forSeer !== (backend !== 'arr')) {
+    return forSeer || (isChosen(p.profileId) && p.rootFolder) ? { ...p } : {};
+  }
+  if (!isChosen(p.profileId) || !p.rootFolder) return {};
+  if (!forSeer) {
+    return { profileId: Number(p.profileId), rootFolder: p.rootFolder, ...(p.tags?.length ? { tags: p.tags.map(Number) } : {}) };
+  }
+  return {
+    serverId: Number(p.serverId), profileId: Number(p.profileId), rootFolder: p.rootFolder, is4k: p.is4k === true,
+    ...(isChosen(p.languageProfileId) ? { languageProfileId: Number(p.languageProfileId) } : {}),
+  };
+}
+
+// A Radarr/Sonarr job profile with a quality profile but no root folder would be dropped on save,
+// leaving the job on the default profile without a word: the dialog refuses to save it instead.
+export function incompleteArrJobProfile(profile) {
+  const p = profile || {};
+  return !isChosen(p.serverId) && isChosen(p.profileId) && !p.rootFolder;
+}
+
+// Whether a job profile is a custom choice for the active backend (drives the summary and the open state).
+export function hasJobProfile(profile, backend) {
+  const p = profile || {};
+  return backend === 'arr' ? !isChosen(p.serverId) && isChosen(p.profileId) : isChosen(p.serverId);
 }

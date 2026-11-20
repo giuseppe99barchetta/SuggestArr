@@ -54,7 +54,7 @@
           />
         </label>
 
-        <p v-if="error" class="m-0 text-[0.85rem] text-bad">
+        <p v-if="error" role="alert" class="m-0 text-[0.85rem] text-bad">
           <i aria-hidden="true" class="fas fa-exclamation-circle"></i> {{ error }}
         </p>
 

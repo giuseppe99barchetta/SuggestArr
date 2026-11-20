@@ -1,23 +1,33 @@
 <template>
   <section class="flex flex-col gap-4">
     <div v-if="showHeader" class="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 class="m-0 text-lg font-bold text-ink">Request approval</h2><p class="m-0 text-sm text-ink-3">Review requests before they are sent to Seer.</p></div>
+      <div><h2 class="m-0 text-lg font-bold text-ink">Request approval</h2><p class="m-0 text-sm text-ink-3">Review requests before they are sent to Seer or added to Radarr/Sonarr.</p></div>
       <div class="flex gap-2">
         <select v-model="jobId" aria-label="Manual job" class="h-10 rounded-ctl border border-edge-strong bg-panel px-3 text-sm text-ink"><option :value="null">Choose job</option><option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.name }}</option></select>
         <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!jobId || running" @click="runJob">Run now</button>
       </div>
     </div>
 
-    <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-panel/95 px-4 py-3 backdrop-blur lg:top-4">
-      <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white" @click="confirmAction('approve')">Approve</button>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-bad" @click="confirmAction('blacklist')">Blacklist</button>
-      <button v-if="canRetry" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink" @click="confirmAction('retry')">Retry</button>
-      <button v-if="canRequestAgain" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink" @click="confirmAction('request-again')">Request again</button>
-      <span v-if="!selected.length" class="text-[13px] text-ink-4">Click cards to select them</span>
+    <div v-if="pausedMessage" role="status" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-sm">
+      <span class="mr-auto text-ink-2"><i aria-hidden="true" class="fas fa-pause-circle mr-1.5 text-caution"></i>{{ pausedMessage }}</span>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="running" @click="runJob(true)">Run anyway</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2" @click="pausedMessage = ''">Dismiss</button>
     </div>
 
+    <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-panel/95 px-4 py-3 backdrop-blur lg:top-4">
+      <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white" @click="confirmAction('approve')">Approve</button>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-bad" @click="confirmAction('blacklist')">Blacklist</button>
+      <button v-if="canRetry" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[0.8125rem] font-bold text-brand-ink" @click="confirmAction('retry')">Retry</button>
+      <button v-if="canRequestAgain" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[0.8125rem] font-bold text-brand-ink" @click="confirmAction('request-again')">Request again</button>
+      <span v-if="!selected.length" class="text-[0.8125rem] text-ink-4">Click cards to select them</span>
+    </div>
+
+    <div v-if="!bulkMode && status === 'awaiting_approval' && total > 0" class="flex flex-wrap items-center gap-2">
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="loadingAll || actionLoading" @click="confirmAll('approve')"><i aria-hidden="true" class="fas fa-check-double mr-1.5"></i>Approve all ({{ total }})</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2 disabled:opacity-50" :disabled="loadingAll || actionLoading" @click="confirmAll('reject')"><i aria-hidden="true" class="fas fa-times mr-1.5"></i>Reject all ({{ total }})</button>
+    </div>
     <p v-if="!bulkMode && items.some(item => item.status === 'awaiting_approval')" class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
     <MediaGridSkeleton v-if="loading && !items.length" :count="6" label="Loading requests…" />
     <div v-else-if="!items.length && showEmpty" class="py-10 text-center text-sm text-ink-3">No requests in this state.</div>
@@ -47,12 +57,12 @@
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" title="Cancel" @click.stop="seenMenuId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
           </template>
           <template v-else-if="item.status === 'awaiting_approval'">
-            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
+            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="openSeen(item)"><i aria-hidden="true" class="fas fa-eye"></i></button>
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i aria-hidden="true" class="fas fa-times"></i></button>
           </template>
-          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
-          <button v-else type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="confirmRequestAgain(item)">Request again</button>
+          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[0.8125rem] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
+          <button v-else type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[0.8125rem] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="confirmRequestAgain(item)">Request again</button>
         </template>
         <div class="media-card-body flex flex-col gap-1 text-xs">
           <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>
@@ -67,7 +77,7 @@
 
     <SeenRatingDialog v-if="seenRatingItem" :item="seenRatingItem" :busy="actionLoading" @save="saveSeenRating" @close="seenRatingItem = null" />
 
-    <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" @close="confirmation = null">
+    <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" :busy="actionLoading" @close="confirmation = null">
       <div class="flex flex-col gap-4 p-6">
         <div class="flex flex-col gap-1">
           <h3 id="confirm-title" class="m-0 text-lg font-bold" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'text-bad' : 'text-ink'"><i aria-hidden="true" :class="confirmation.icon" class="mr-2"></i>{{ confirmation.title }}</h3>
@@ -83,9 +93,9 @@
           </ul>
           <p class="m-0 rounded-ctl bg-panel-2 p-3 text-sm leading-relaxed text-ink-3"><i aria-hidden="true" class="fas fa-info-circle mr-1.5 text-brand-ink"></i>Rejected items are archived, not blacklisted. Filter requests by <strong>Rejected</strong> to find and request them again.</p>
         </template>
-        <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="servers" :media-types="confirmationMediaTypes" />
+        <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="serversForItems(servers, confirmation.items)" :media-types="confirmationMediaTypes" />
         <div class="mt-2 flex justify-end gap-2">
-          <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="confirmation = null">Cancel</button>
+          <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink disabled:opacity-50" :disabled="actionLoading" @click="confirmation = null">Cancel</button>
           <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:opacity-50" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'bg-bad text-on-bad' : 'bg-brand text-white'" :disabled="actionLoading" @click="decide">{{ confirmation.confirmLabel }}</button>
         </div>
       </div>
@@ -99,16 +109,18 @@ import AppDialog from '@/components/ui/AppDialog.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
-import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
+import { approvalNeedsDialog, loadSeerServers, mediaTypesOf, serversForItems } from '@/utils/requestProfiles.js';
+import { approvalNotice, deliveryLabel } from '@/utils/deliveryTarget.js';
 import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
+import { chunkIds } from '@/utils/requestApproval.js';
 import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice, SeenRatingDialog },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, sortBy: { type: String, default: 'date-desc' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
+  data() { return { items: [], selected: [], actionLoading: false, loadingAll: false, loadSeq: 0, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, pausedMessage: '', pausedJobId: null, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -128,17 +140,42 @@ export default {
   async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; }); this.servers = await loadSeerServers(axios); },
   beforeUnmount() { clearTimeout(this.searchTimer); this.observer?.disconnect(); },
   methods: {
+    // A page-one load always runs and supersedes one in flight, so filter changes and
+    // post-decision refreshes are never skipped; superseded responses are dropped.
     async load(page = this.page) {
-      if (this.loading) return;
+      if (this.loading && page !== 1) return;
+      const seq = ++this.loadSeq;
       this.loading = true;
       try {
-        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, sort_by: this.sortBy, page, per_page: 24 } })).data;
+        const data = (await axios.get('/api/automation/requests/workflow', { params: { ...this.filterParams(), status: this.status, page, per_page: 24 } })).data;
+        if (seq !== this.loadSeq) return;
         this.items = page === 1 ? data.items : [...this.items, ...data.items];
         Object.assign(this, { total: data.total, page: data.page, pages: data.pages });
         this.$emit('update:total', data.total);
         if (page === 1) this.selected = [];
         this.$nextTick(this.observeLoadMore);
-      } finally { this.loading = false; }
+      } finally { if (seq === this.loadSeq) this.loading = false; }
+    },
+    filterParams() { return { search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, sort_by: this.sortBy }; },
+    // "Approve all" / "Reject all" act on one server snapshot of every matching suggestion,
+    // not on the pages loaded so far; a response for filters changed meanwhile is dropped.
+    async confirmAll(action) {
+      const filters = JSON.stringify([this.status, this.filterParams()]);
+      this.loadingAll = true;
+      try {
+        const { data } = await axios.get('/api/automation/requests/workflow/pending', { params: this.filterParams() });
+        // Dropped if the filters changed or the user moved on to another dialog meanwhile.
+        if (JSON.stringify([this.status, this.filterParams()]) !== filters || this.bulkMode || this.confirmation || this.seenRatingItem) return;
+        const items = data.items || [];
+        if (!items.length) {
+          this.$toast.open({ message: 'Nothing is waiting for approval', type: 'info' });
+          this.load(1);
+          return;
+        }
+        this.confirmAction(action, items, data.truncated ? ` Only the first ${items.length} are included; the rest stay in the queue.` : '');
+      } catch (error) {
+        this.$toast.open({ message: error.response?.data?.message || 'Could not load the approval queue', type: 'error' });
+      } finally { this.loadingAll = false; }
     },
     observeLoadMore() {
       this.observer?.disconnect();
@@ -193,16 +230,31 @@ export default {
       // Approving is the one action that spends bandwidth and disk and cannot
       // be taken back, so when there is a profile to pick it asks first —
       // rejecting already does. Only a loaded, empty server list skips it.
-      if (action === 'approve' && approvalNeedsDialog(this.servers)) { this.confirmSingle('approve', id); return; }
+      const item = this.items.find(request => request.id === id);
+      if (action === 'approve' && approvalNeedsDialog(serversForItems(this.servers, [item]))) { this.confirmSingle('approve', id); return; }
       this.actionLoading = true;
       try {
-        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
-        notifyRequestsChanged();
+        try {
+          await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+          notifyRequestsChanged();
+        } catch (error) {
+          if (!error.response) this.refreshAfterLostResponse();
+          throw error;
+        }
         await this.load(1);
-        this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' });
+        this.$toast.open({ message: action === 'approve' ? approvalNotice([item]) : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
-    confirmAction(action) { const labels = { approve: ['Send to Seer', `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to Seer?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    // A decision whose response was lost may have been applied, or still be committing on the
+    // server: look again now and once more shortly after, so the queue does not stay stale.
+    refreshAfterLostResponse() {
+      const refresh = () => { notifyRequestsChanged(); this.load(1).catch(() => {}); };
+      refresh();
+      // Skipped while the user is selecting or deciding: that reload would wipe their work, and their next action reloads anyway.
+      setTimeout(() => { if (!this.bulkMode && !this.confirmation && !this.seenRatingItem) refresh(); }, 3000);
+    },
+    confirmAction(action, items = this.selectedItems, note = '') { const labels = { approve: [`Send to ${deliveryLabel(items)}`, `Send ${items.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${items.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${items.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${items.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${items.length} selected items to ${deliveryLabel(items)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: items.map(item => item.id), items: [...items], removeBlacklist: action === 'request-again' && items.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1] + note, icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    serversForItems,
     keyDecision,
     swipeDecision,
     touchPoint,
@@ -217,27 +269,62 @@ export default {
     confirmSingle(action, id) {
       const item = this.items.find(request => request.id === id);
       this.confirmation = action === 'approve'
-        ? { action, ids: [id], items: [item], title: 'Send to Seer', message: `Send ${item?.title || 'this item'} to Seer?`, icon: 'fas fa-paper-plane', confirmLabel: 'Send' }
+        ? { action, ids: [id], items: [item], title: `Send to ${deliveryLabel([item])}`, message: `Send ${item?.title || 'this item'} to ${deliveryLabel([item])}?`, icon: 'fas fa-paper-plane', confirmLabel: 'Send' }
         : { action, ids: [id], items: [item], title: 'Reject request', message: 'This item will be removed from the approval queue.', icon: 'fas fa-archive', confirmLabel: 'Reject request' };
     },
-    confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? 'Remove this item from the blacklist and send it to Seer?' : 'Send this rejected item to Seer?', icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
+    confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], items: [item], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? `Remove this item from the blacklist and send it to ${deliveryLabel([item])}?` : `Send this rejected item to ${deliveryLabel([item])}?`, icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
     async decide() {
+      // Read once: the dialog may be gone by the time the last chunk returns.
       const { action, ids, removeBlacklist } = this.confirmation;
+      const decided = [...(this.confirmation.items || [])];
       const profile = action === 'approve' ? this.$refs.profileChoice?.payload() : null;
       this.actionLoading = true;
+      let sent = 0;
+      let ignoredOverrides = 0;
+      let failure = null;
       try {
-        await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
-        notifyRequestsChanged();
+        for (const chunk of chunkIds(ids)) {
+          try {
+            const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids: chunk, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+            notifyRequestsChanged();
+            sent += chunk.length;
+            ignoredOverrides += data?.ignored_overrides || 0;
+          } catch (error) { failure = error; break; }
+        }
+        // No response means the server may still have applied that chunk.
+        const lost = failure && !failure.response;
+        if (failure) {
+          // A rejected profile comes back as 400 with a reason. Swallowing it
+          // would leave the dialog looking as if nothing had happened.
+          this.$toast.open({ message: lost ? 'The connection dropped; some requests may already be updated' : (failure.response.data?.message || 'Could not update requests'), type: 'error' });
+          if (!sent && !lost) return;
+        }
+        // Done, partly done, or maybe done: show the queue as it now is.
         this.confirmation = null;
-        await this.load(1);
-        this.$toast.open({ message: 'Requests updated', type: 'success' });
-      } catch (error) {
-        // A rejected profile comes back as 400 with a reason. Swallowing it
-        // would leave the dialog looking as if nothing had happened.
-        this.$toast.open({ message: error.response?.data?.message || 'Could not update requests', type: 'error' });
+        if (lost) { this.refreshAfterLostResponse(); return; }
+        try {
+          await this.load(1);
+        } catch {
+          this.$toast.open({ message: 'Requests were updated, but the list could not be refreshed', type: 'error' });
+          return;
+        }
+        if (!failure) this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, ignoredOverrides) : 'Requests updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
-    async runJob() { this.running = true; try { await axios.post(`/api/jobs/${this.jobId}/run`); await this.load(1); } finally { this.running = false; } }
+    async runJob(force = false) {
+      this.running = true;
+      // "Run anyway" belongs to the job that was paused, even if another one is selected meanwhile.
+      const jobId = force === true && this.pausedJobId ? this.pausedJobId : this.jobId;
+      this.pausedMessage = '';
+      try {
+        const { data } = await axios.post(`/api/jobs/${jobId}/run`, force === true ? { force: true } : {});
+        // A paused job did not run: say why and offer to run it anyway.
+        if (data?.status === 'paused') { this.pausedMessage = data.message; this.pausedJobId = jobId; }
+        await this.load(1);
+      } catch (error) {
+        this.$toast.open({ message: error.response?.status === 409 ? 'This job is already running.' : (error.response?.data?.message || 'Could not run the job'), type: 'error' });
+      } finally { this.running = false; }
+    }
   }
 };
 </script>

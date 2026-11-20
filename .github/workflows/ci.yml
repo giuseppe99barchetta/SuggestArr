@@ -33,6 +33,31 @@ jobs:
       - name: Audit production frontend dependencies
         run: cd client && npm audit --omit=dev --audit-level=high
 
+  whats-new:
+    name: What's new note not reused after release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Once a note has shipped on main, changing its slides under the same id would never reach
+      # users who already saw it: the next change must empty the slides and change the id.
+      - name: Compare with the note already on main
+        run: |
+          file=client/src/data/releaseNotes.js
+          if ! git show origin/main:$file > /tmp/main_notes.js 2>/dev/null; then
+            echo "main has no release note yet"; exit 0
+          fi
+          main_id=$(grep -m1 "^  id:" /tmp/main_notes.js)
+          this_id=$(grep -m1 "^  id:" $file)
+          if [ "$main_id" = "$this_id" ] && ! diff -q /tmp/main_notes.js $file > /dev/null; then
+            echo "::error file=$file::The note $this_id already shipped on main. Empty its slides and change the id before adding new ones."
+            exit 1
+          fi
+
   test-backend:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest

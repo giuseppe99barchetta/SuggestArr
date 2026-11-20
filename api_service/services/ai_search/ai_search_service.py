@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Dict, List, Optional, Union
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
+from api_service.config.config import get_request_backend
 from api_service.services.library_content import load_library_content
 from api_service.services.llm.llm_service import (
     MAX_EXCLUSION_ITEMS,
@@ -48,14 +49,19 @@ class AiSearchService:
     5. Return AI-curated results only — no generic Discover fallback.
     """
 
-    def __init__(self):
+    llm_user_id: Optional[int] = None  # account whose personal AI provider answers; None = the shared one
+
+    def __init__(self, llm_user_id: Optional[int] = None):
         """Initialise AiSearchService from the current application configuration.
+
+        ``llm_user_id`` is the account whose personal AI provider answers (the shared one when it has none).
 
         Uses get_runtime_config() so that DB-backed integration credentials
         (TMDB_API_KEY, JELLYFIN_TOKEN, SEER_TOKEN, etc.) are always present
         even after a config import that only writes keys to the DB.
         """
         self.config = ConfigService.get_runtime_config()
+        self.llm_user_id = llm_user_id
 
     # ------------------------------------------------------------------
     # Public API
@@ -206,7 +212,8 @@ class AiSearchService:
         if not self.config.get("EXCLUDE_DOWNLOADED", True):
             return {}
         try:
-            if not self.config.get("SEER_API_URL"):
+            # Direct Radarr/Sonarr delivery never contacts Seer, even if its credentials are still saved.
+            if not self.config.get("SEER_API_URL") or get_request_backend(self.config) == "arr":
                 return await load_library_content(self.config)
             from api_service.services.seer.seer_client import SeerClient  # local import avoids circular deps
             async with SeerClient(self.config["SEER_API_URL"], self.config.get("SEER_TOKEN")) as seer_client:
@@ -258,7 +265,8 @@ class AiSearchService:
         already_requested: set = set()
         try:
             from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
-            already_requested = DatabaseManager().get_requested_tmdb_ids()
+            # Typed: a requested movie must not hide a show with the same TMDb id.
+            already_requested = DatabaseManager().get_requested_tmdb_ids_by_type(media_type)
         except Exception as exc:
             logger.warning("Could not fetch already-requested IDs: %s", exc)
 
@@ -307,6 +315,7 @@ class AiSearchService:
             interpretation_query, [] if people_data else history, media_type,
             max_suggestions=llm_suggestions_count, liked_titles=liked_titles, excluded_titles=excluded_titles,
             people_profiles=people_data["profiles"] if people_data else None,
+            user_id=self.llm_user_id,
         )
         # Enforce the UI selection even if the LLM returns a conflicting language.
         if original_language != "auto":
@@ -437,6 +446,7 @@ class AiSearchService:
             people_context=[{"name": person["name"], "taste": person["taste"], "requester": person["requester"]}
                             for person in people_data["profiles"]]
             if people_data else None,
+            llm_user_id=self.llm_user_id,
         )
 
         final_slice = final[:max_results]
@@ -1031,6 +1041,7 @@ class AiSearchService:
         media_type: str,
         reference_titles: Optional[List[Dict[str, Any]]] = None,
         people_context: Optional[List[Dict[str, Any]]] = None,
+        llm_user_id: Optional[int] = None,
     ) -> None:
         """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
         llm_rationale_map: Dict[str, str] = {}
@@ -1050,6 +1061,7 @@ class AiSearchService:
                 discover_params=discover_params,
                 results=unresolved_results,
                 **({"people_context": people_context} if people_context else {}),
+                user_id=llm_user_id,
             )
 
         seen_rationales: set = set()

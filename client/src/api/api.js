@@ -16,6 +16,21 @@ export const testMdblistApi = (apiKey) => {
     return axios.post('/api/mdblist/test', { api_key: apiKey });
 };
 
+// Test a Radarr/Sonarr connection: { service } uses the saved credentials, or pass URL + key
+export const testArrApi = (payload) => {
+    return axios.post('/api/arr/test', payload);
+};
+
+// Quality profiles, root folders and tags of a Radarr/Sonarr instance (same payload as testArrApi)
+export const getArrOptionsApi = (payload) => {
+    return axios.post('/api/arr/options', payload);
+};
+
+// Options of a saved Radarr/Sonarr instance, for job owners (no credential overrides)
+export const getSavedArrOptionsApi = (service) => {
+    return axios.get('/api/arr/options', { params: { service } });
+};
+
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
     return axios.post('/api/jellyfin/test', { JELLYFIN_API_URL: url, JELLYFIN_TOKEN: token });
@@ -253,7 +268,10 @@ export const previewMySimklRecent = (limit = 10) =>
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');
 export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings', payload);
-export const runCleanupNow = (dryRun = null) => axios.post('/api/cleanup/run', dryRun === null ? {} : { dry_run: dryRun });
+export const runCleanupNow = (dryRun = null, confirmLarge = false) => axios.post('/api/cleanup/run', {
+  ...(dryRun === null ? {} : { dry_run: dryRun }),
+  ...(confirmLarge ? { confirm_large: true } : {}),
+});
 export const getCleanupLog = (limit = 100) => axios.get('/api/cleanup/log', { params: { limit } });
 
 // Config export: download a configuration snapshot (admin only)
@@ -293,6 +311,10 @@ export const linkPlexIntegration = (data) => axios.post('/api/integrations/plex/
 
 // Own profile update (any authenticated user)
 export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);
+// Own AI provider (administrators and accounts allowed to manage AI)
+export const getMyAiProvider = () => axios.get('/api/config/openai/user');
+export const saveMyAiProvider = (data) => axios.post('/api/config/openai/user', data);
+export const deleteMyAiProvider = () => axios.delete('/api/config/openai/user');
 export const getApiKeys = () => axios.get('/api/auth/api-keys');
 export const createApiKey = (data) => axios.post('/api/auth/api-keys', data);
 export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);

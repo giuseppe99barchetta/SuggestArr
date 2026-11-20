@@ -16,7 +16,9 @@ New jobs follow the global **Approve requests before sending them to Seer** sett
 disabled by default under **Advanced**. Each job can inherit that setting or override
 it to always approve or always send automatically. Held results appear on the
 Requests page, where the job owner or an administrator can send them to Seer,
-reject them, or blacklist them globally.
+reject them, or blacklist them globally. **Approve all** and **Reject all** act on
+every suggestion waiting for approval that matches the current filters (up to 1000
+at a time), not only the cards loaded on screen.
 
 The global Request Workflow settings can also pause a job while its SuggestArr
 suggestions await review and automatically reject suggestions left pending for a
@@ -62,6 +64,9 @@ expires (up to 10 minutes).
 It checks up to 100 list entries at a time without creating requests; use
 **Load more titles** to inspect the next page. The import rechecks availability
 before enqueueing, so titles acquired since the preview are still excluded.
+Like a job's **Preview**, it shows titles and descriptions in your display
+language (profile **Title language**, else `TMDB_LANGUAGE`); requests are still
+sent in the default language.
 
 Use `https://mdblist.com/lists/username/list-name` or
 `https://trakt.tv/users/username/lists/list-name`, then **Verify list**. Private
@@ -119,11 +124,13 @@ SuggestArr includes safety tools for running automation without flooding Seer or
 
 Each job has a **Pause while Seer requests are pending** option in its schedule settings.
 
-When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs, and force-run-all.
+When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs (**Run now**) and force-run-all. When **Run now** hits a pause (this one, SuggestArr approvals waiting, or unwatched suggestions) it says why and offers **Run anyway**, which skips the pauses for that run only. A job never runs twice at once: starting it while it is running is refused (HTTP 409 from the API).
 
 Recommendation and Trakt Recommendation jobs can also enable **Pause if suggestions remain unwatched**. Movie and TV activity is tracked separately per linked media user. Watching a requested movie or one episode of a requested show starts a fresh cycle; only scheduled runs are paused.
 
 Use this when Seer approvals are part of your workflow and you want new automation runs to wait until the previous batch has been reviewed.
+
+With Radarr & Sonarr delivery (no Seer), the same option pauses the job while Radarr or Sonarr still has downloads in its queue.
 
 ### Auto-decline pending Seerr requests
 
@@ -137,10 +144,13 @@ Cleanup Automation is available under **Advanced -> Cleanup Automation**.
 
 It looks at requests created by SuggestArr, waits for the configured grace period, checks whether the item is favorited in Plex, Jellyfin, or Emby, and then:
 
-- keeps favorited items
+- keeps favorited items (with Plex, only the rating of the account behind the Plex token counts; with Jellyfin/Emby, the favorites of the selected users)
+- keeps items watched by the person who requested them within the grace period
 - skips items no longer present in the media library
 - logs what would be deleted in dry-run mode
-- asks Seer to delete matching media files when real mode is enabled
+- asks Seer to delete matching media files when real mode is enabled, or, with Radarr & Sonarr delivery, deletes them straight in Radarr/Sonarr, only for titles tagged `suggestarr`
+
+A run that would delete more than 20 titles, or at least 5 titles and more than 30% of the candidates, deletes nothing and shows **Run anyway** on the Cleanup page (the scheduled run just stops and logs it). The confirmation only covers the run that was blocked: if more titles would be deleted by the time you confirm, it asks again. A dry-run is never blocked and reports `breaker=would_block` when a real run would be.
 
 Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
 
@@ -224,6 +234,12 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 1. Open the web interface → **Settings → Advanced**.
 2. Fill in the **AI Provider Configuration** fields (API key, base URL, model).
 3. Save. The **AI Search** tab will become active in the dashboard.
+
+#### Shared and personal AI providers
+
+The provider set up in **Settings → Advanced** is shared: every account's AI Search and every scheduled job uses it.
+
+An administrator can also let an account use its own provider (**Users → Edit → AI settings**). That account then sees **My AI provider** on its profile page, where it enters an API key, an optional address (for a local provider such as Ollama) and an optional model. Its own AI Search then uses that provider; without one, or if the permission is removed, it goes back to the shared provider. The administrator's key is never sent to an address a person chose. A personal address must be a public one; a local model on the LAN goes in the shared provider. Administrators do not see **My AI provider**, since they already manage the shared one. A search that includes other people (a group search) always uses the shared provider, so their history and taste never reach a provider they did not agree to. Scheduled jobs always use the shared provider, and personal keys are not part of config exports.
 
 > AI Search is independent of the automated recommendations run — it is triggered manually from the dashboard and does not affect cron-based automation.
 

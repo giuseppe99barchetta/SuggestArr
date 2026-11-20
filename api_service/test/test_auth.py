@@ -964,6 +964,21 @@ class TestAuthLogoutEndpoint(_AuthBlueprintBase):
         resp = self.client.post('/api/auth/refresh')
         self.assertEqual(resp.status_code, 401)
 
+    def test_revoke_under_cookie_path_revokes_token_server_side(self):
+        """The SPA logs out at /api/auth/refresh/revoke: the browser sends the cookie there."""
+        self._create_user("alice", "StrongPass1!")
+        self._login("alice", "StrongPass1!")
+        self.assertEqual(len(self._refresh_tokens), 1)
+        raw = self.client.get_cookie('suggestarr_refresh', path='/api/auth/refresh').value
+        resp = self.client.post('/api/auth/refresh/revoke')
+        self.assertEqual(resp.status_code, 200)
+        from api_service.auth.auth_service import AuthService
+        row = self._refresh_tokens[AuthService.hash_refresh_token(raw)]
+        self.assertTrue(row["revoked"])
+        # A copy of the cookie kept elsewhere no longer works either.
+        self.client.set_cookie('suggestarr_refresh', raw, path='/api/auth/refresh')
+        self.assertEqual(self.client.post('/api/auth/refresh').status_code, 401)
+
     def test_logout_without_cookie_is_safe(self):
         """Calling logout with no cookie must not crash."""
         resp = self.client.post('/api/auth/logout')

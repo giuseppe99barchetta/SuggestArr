@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasServers, isChosen, loadSeerServers, mediaTypesOf, profileTypes,
+  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasJobProfile, hasServers, incompleteArrJobProfile, isChosen, jobProfilePayload, loadSeerServers, mediaTypesOf, profileTypes, serversForItems,
 } from './requestProfiles.js';
 
 const servers = {
@@ -112,4 +112,54 @@ test('choosing only the profile is enough to send a complete profile', () => {
   assert.deepEqual(buildProfilePayload(['movie'], chosen), {
     movie: { serverId: 0, profileId: 7, rootFolder: '/movies', is4k: false },
   });
+});
+
+const seerProfile = { serverId: 0, profileId: 7, rootFolder: '/movies', is4k: false, languageProfileId: 2 };
+const arrProfile = { profileId: 4, rootFolder: '/movies-4k', tags: [5] };
+
+test('arr mode, untouched stored Seer profile is saved byte-identical', () => {
+  assert.equal(JSON.stringify(jobProfilePayload(seerProfile, 'arr')), JSON.stringify(seerProfile));
+});
+
+test('seer mode keeps a stored Radarr/Sonarr profile untouched', () => {
+  assert.deepEqual(jobProfilePayload(arrProfile, 'seer'), arrProfile);
+  assert.deepEqual(jobProfilePayload(arrProfile, 'both'), arrProfile);
+});
+
+test('each backend builds its own shape from the form, server id 0 included', () => {
+  assert.deepEqual(jobProfilePayload({ profileId: '4', rootFolder: '/x', tags: ['5'] }, 'arr'), { profileId: 4, rootFolder: '/x', tags: [5] });
+  assert.deepEqual(jobProfilePayload({ profileId: 4, rootFolder: '/x', tags: [] }, 'arr'), { profileId: 4, rootFolder: '/x' });
+  assert.deepEqual(jobProfilePayload({ ...seerProfile, serverId: '0', languageProfileId: '' }, 'seer'),
+    { serverId: 0, profileId: 7, rootFolder: '/movies', is4k: false });
+});
+
+test('incomplete choices save no profile', () => {
+  assert.deepEqual(jobProfilePayload({ profileId: 4, rootFolder: '' }, 'arr'), {});
+  assert.deepEqual(jobProfilePayload({ serverId: 1, profileId: '', rootFolder: '' }, 'seer'), {});
+  assert.deepEqual(jobProfilePayload({}, 'arr'), {});
+  assert.deepEqual(jobProfilePayload(undefined, 'seer'), {});
+});
+
+test('a custom profile only counts for the backend that uses it', () => {
+  assert.equal(hasJobProfile(arrProfile, 'arr'), true);
+  assert.equal(hasJobProfile(seerProfile, 'arr'), false);
+  assert.equal(hasJobProfile(seerProfile, 'seer'), true);
+  assert.equal(hasJobProfile(arrProfile, 'seer'), false);
+});
+
+test('approving direct Radarr/Sonarr rows never asks for a Seer profile, even when Seer is unreachable', () => {
+  const failed = { movie: [], tv: [], failed: true };
+  assert.equal(approvalNeedsDialog(failed), true);
+  assert.equal(approvalNeedsDialog(serversForItems(failed, [{ backend: 'arr' }])), false);
+  assert.equal(approvalProfileNotice(serversForItems(failed, [{ backend: 'arr' }])), '');
+  assert.equal(serversForItems(failed, [{ backend: 'arr' }, { backend: 'seer' }]), failed);
+  assert.equal(serversForItems(servers, [{}]), servers);  // rows from before the field are Seer's
+});
+
+test('a Radarr/Sonarr job profile without a root folder is incomplete; a Seer one is not judged here', () => {
+  assert.equal(incompleteArrJobProfile({ profileId: 4, rootFolder: '' }), true);
+  assert.equal(incompleteArrJobProfile({ profileId: 0 }), true);
+  assert.equal(incompleteArrJobProfile({ profileId: 4, rootFolder: '/movies' }), false);
+  assert.equal(incompleteArrJobProfile({}), false);
+  assert.equal(incompleteArrJobProfile({ serverId: 0, profileId: 7, rootFolder: '' }), false);
 });

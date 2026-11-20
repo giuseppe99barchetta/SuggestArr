@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+from api_service.exceptions.api_exceptions import BackendUnavailableError
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 from typing import Dict, List, Set
@@ -95,6 +96,9 @@ class SeerClient(BaseHTTPClient):
     """
     A client to interact with the Seer service API for handling media requests and authentication.
     """
+
+    # Set while a delivery runs when Seer could not be reached (network error, timeout, 502/503/504).
+    _transport_failed = False
     
     # Override HTTP_OK to include 202 Accepted for async operations
     HTTP_OK = {200, 201, 202}
@@ -177,6 +181,9 @@ class SeerClient(BaseHTTPClient):
             self.logger.debug("Attempt %d for request to %s", attempt + 1, url)
 
             headers, cookies = self._get_auth_headers(use_cookie, api_user)
+            # Only the last attempt tells whether Seer was reached: an earlier timeout followed by a
+            # real answer (even a 400) is a verdict on the request, not an outage.
+            self._transport_failed = False
 
             # Use shared session but override headers/cookies for this request
             # since aiohttp allows passing request-level headers/cookies
@@ -216,12 +223,15 @@ class SeerClient(BaseHTTPClient):
                             self.logger.debug("Retrying login due to status 404")
                             await self.login()
                     else:
+                        if response.status in (502, 503, 504):
+                            self._transport_failed = True
                         resp = await response.json()
                         self.logger.error(
                             f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
                         )
             except aiohttp.ClientError as e:
                 self.logger.error(f"Client error during request to {url}: {e}")
+                self._transport_failed = True
             await asyncio.sleep(delay)
         return None
 
@@ -254,11 +264,14 @@ class SeerClient(BaseHTTPClient):
                 else:
                     self.session_token = None
                     self.is_logged_in = False
+                    if response.status in (502, 503, 504):
+                        self._transport_failed = True
                     self.logger.error("Login failed: %d", response.status)
         except asyncio.TimeoutError:
             self.session_token = None
             self.is_logged_in = False
             self.logger.error("Login request to %s timed out.", login_url)
+            self._transport_failed = True
 
     async def get_all_users(self, max_users=100):
         """Fetch all users from the Seer service API, returning a list of user IDs, names, and local status."""
@@ -493,6 +506,25 @@ class SeerClient(BaseHTTPClient):
 
         return data
 
+    # Delivery backend recorded on each queued row (see queue_worker).
+    BACKEND = 'seer'
+
+    def _can_enqueue(self, media_type):
+        """Whether this client can deliver ``media_type``; direct backends override it."""
+        return True
+
+    @staticmethod
+    def _job_profile_overrides(context, media_type):
+        """Per-job Seer profile values (server, profile, root folder...) to merge into the payload.
+
+        A profile without ``serverId`` is meant for direct Radarr/Sonarr delivery and is ignored here.
+        """
+        profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        if profile.get('serverId') is None:
+            return {}
+        return {key: profile[key] for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                if profile.get(key) is not None}
+
     async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, is_anime=False, rationale=None):
         """Enqueue a Seer submission for reliable background delivery.
 
@@ -504,6 +536,9 @@ class SeerClient(BaseHTTPClient):
             already submitted).
         """
         tmdb_id = str(media['id'])
+
+        if not self._can_enqueue(media_type):
+            return False
 
         # Fast intra-process guard (asyncio is single-threaded: check+add are atomic)
         if (media_type, tmdb_id) in self.pending_requests:
@@ -545,13 +580,13 @@ class SeerClient(BaseHTTPClient):
         context = self.queue_context
         if context.get('_replacement_for') is not None:
             payload['_replacement_for'] = context['_replacement_for']
-        profile = (context.get('request_profiles') or {}).get(media_type) or {}
-        for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
-            if profile.get(key) is not None:
-                payload[key] = profile[key]
+        payload['_backend'] = self.BACKEND
+        payload.update(self._job_profile_overrides(context, media_type))
         payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
         env = load_env_vars()
-        if (context.get('seer_identity_mode') == 'matching_user'
+        if self.BACKEND != 'seer':
+            pass  # direct delivery has no Seer users to attribute the request to
+        elif (context.get('seer_identity_mode') == 'matching_user'
                 and context.get('job_type') == 'recommendation'
                 and env.get('SELECTED_SERVICE') in ('jellyfin', 'emby')):
             seer_user_id = await self._resolve_jellyfin_seer_user_id(user_id) if user_id else None
@@ -588,8 +623,10 @@ class SeerClient(BaseHTTPClient):
         absent or ``None``.
 
         :param payload: The JSON-decoded payload stored in pending_requests.
-        :return: The Seer response on success, False on failure.
+        :return: The Seer response on success, False when Seer rejected the request.
+        :raises BackendUnavailableError: When Seer could not be reached or answered 502/503/504.
         """
+        self._transport_failed = False
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
         media_type = data.get('mediaType', 'unknown')
@@ -610,6 +647,8 @@ class SeerClient(BaseHTTPClient):
                 data['rootFolder'] = defaults.get('rootFolder')
 
         # Abort if required fields are still absent after the fallback
+        if self._transport_failed and (data.get('profileId') is None or data.get('rootFolder') is None):
+            raise BackendUnavailableError("Seer could not be reached to fetch the default profile", "Seer")
         if data.get('profileId') is None:
             self.logger.error(
                 "Cannot submit Jellyseerr request for %s tmdb:%s — "
@@ -634,6 +673,8 @@ class SeerClient(BaseHTTPClient):
         if data.get('userId') is None and self.username and self.password:
             await self.login()
             if not self.session_token:
+                if self._transport_failed:
+                    raise BackendUnavailableError("Seer did not answer the login", "Seer")
                 self.logger.error(
                     "Cannot submit Jellyseerr request for %s tmdb:%s — "
                     "configured Seer user login failed. Re-authenticate the Seer user in settings.",
@@ -660,6 +701,8 @@ class SeerClient(BaseHTTPClient):
             self.logger.debug("Seer submission successful: %s", response)
             return response
 
+        if self._transport_failed:
+            raise BackendUnavailableError("Seer is unreachable or answered 502/503/504", "Seer")
         self.logger.error(
             "Jellyseerr request failed for %s tmdb:%s | "
             "response=%s | payload=%s",

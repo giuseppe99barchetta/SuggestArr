@@ -71,7 +71,7 @@
         <details class="group text-xs">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
             <span><i aria-hidden="true" class="fas fa-info-circle mr-2"></i>About these numbers</span>
-            <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform group-open:rotate-180"></i>
+            <i aria-hidden="true" class="fas fa-chevron-down text-[0.625rem] transition-transform group-open:rotate-180"></i>
           </summary>
           <div class="mt-2 leading-relaxed text-ink-3">
             <p v-if="mode === 'demo'" class="m-0">Every number, title and cover in this preview is sample data, so you can see the stories before your own year is recorded. Shared images and captions are labelled as sample data.</p>

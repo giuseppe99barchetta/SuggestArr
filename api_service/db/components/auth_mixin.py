@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from api_service.exceptions.database_exceptions import DatabaseError
+from api_service.db.cascading_delete import delete_cascading
 class AuthMixin:
     def _ph(self) -> str:
         """Return the SQL placeholder character for the current DB type."""
@@ -447,7 +448,8 @@ class AuthMixin:
         """
         Permanently delete a SuggestArr auth user.
 
-        Cascade deletes their refresh_tokens and user_media_profiles.
+        The schema's ON DELETE CASCADE removes their refresh tokens, API keys,
+        media profiles, feedback, rating prompts and search history (on SQLite too).
 
         Args:
             user_id: Primary key of the user to remove.
@@ -456,15 +458,7 @@ class AuthMixin:
             bool: True if a row was deleted, False if the user was not found.
         """
         ph = self._ph()
-        query = f"DELETE FROM auth_users WHERE id = {ph}"
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            # Search history is personal; removed explicitly in case SQLite FK enforcement is off.
-            cursor.execute(f"DELETE FROM ai_search_history WHERE user_id = {ph}", (user_id,))
-            cursor.execute(query, (user_id,))
-            deleted = cursor.rowcount
-            conn.commit()
-        return deleted > 0
+        return delete_cascading(self, f"DELETE FROM auth_users WHERE id = {ph}", (user_id,)) > 0
 
     def get_admin_count(self) -> int:
         """

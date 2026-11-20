@@ -29,14 +29,14 @@
     <AppDialog v-if="showImport" title="Import a CSV" icon="fas fa-file-import" @close="closeImport">
       <div class="flex flex-col gap-3">
         <p class="m-0 text-sm leading-relaxed text-ink-2">UTF-8 file with a header row and these columns:</p>
-        <code class="block rounded-ctl border border-edge bg-canvas px-3 py-2 font-mono text-[13px] text-ink">tmdb_id,media_type,title,year,rating</code>
+        <code class="block rounded-ctl border border-edge bg-canvas px-3 py-2 font-mono text-[0.8125rem] text-ink">tmdb_id,media_type,title,year,rating</code>
         <p class="m-0 text-xs text-ink-4"><code>media_type</code> is <code>movie</code> or <code>tv</code>. Rating is optional, from 0 to 10.</p>
         <div class="flex items-center gap-2">
           <input ref="file" type="file" hidden accept=".csv,text/csv" :disabled="isImporting" @change="onFileChange">
           <button type="button" class="ui-btn shrink-0" :disabled="isImporting" @click="$refs.file.click()">
             <i aria-hidden="true" class="fas fa-folder-open"></i>Choose file
           </button>
-          <span class="min-w-0 flex-1 truncate text-[13px] text-ink-3" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
+          <span class="min-w-0 flex-1 truncate text-[0.8125rem] text-ink-3" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
         </div>
       </div>
       <template #footer>
@@ -71,10 +71,10 @@
       <template v-if="isSyncing"><i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Checking your media server for new plays…</template>
       <template v-else>{{ serverNote }}</template>
     </p>
-    <p v-if="isLoading" class="m-0 text-[13px] text-ink-4">Loading your watch history…</p>
-    <p v-else-if="notLinked" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Link your media server account in <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Profile</router-link> to rate your titles.</p>
-    <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Nothing watched yet. Titles you play on your media server, import or add here show up in this list.</p>
-    <p v-else-if="!filteredItems.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">No titles match these filters.</p>
+    <p v-if="isLoading" class="m-0 text-[0.8125rem] text-ink-4">Loading your watch history…</p>
+    <p v-else-if="notLinked" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[0.8125rem] text-ink-4">Link your media server account in <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Profile</router-link> to rate your titles.</p>
+    <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[0.8125rem] text-ink-4">Nothing watched yet. Titles you play on your media server, import or add here show up in this list.</p>
+    <p v-else-if="!filteredItems.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[0.8125rem] text-ink-4">No titles match these filters.</p>
     <div v-else class="relative overflow-x-auto rounded-ctl border border-edge">
       <table class="w-full min-w-[640px] border-collapse text-sm">
         <thead><tr class="text-left text-xs text-ink-4"><th class="px-3 py-2.5 font-semibold">Title</th><th class="px-3 py-2.5 font-semibold">Type</th><th class="px-3 py-2.5 font-semibold">Rating</th><th class="px-3 py-2.5 font-semibold">Source</th><th class="px-3 py-2.5 font-semibold">Use for suggestions</th><th class="px-3 py-2.5"><span class="sr-only">Actions</span></th></tr></thead>

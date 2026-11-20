@@ -58,3 +58,35 @@ test('switching to bulk mode closes an open rating row', () => {
   assert.match(source, /bulkMode\(value\) \{[^}]*this\.seenMenuId = null;[^}]*\}/);
   assert.match(source, /bulkMode\(value\) \{[^}]*this\.seenRatingItem = null;[^}]*\}/);
 });
+
+
+test('approve all and reject all appear only on the approval queue outside bulk mode', () => {
+  assert.match(source, /<div v-if="!bulkMode && status === 'awaiting_approval' && total > 0"/);
+  assert.match(source, /@click="confirmAll\('approve'\)"[^>]*>.*Approve all \(\{\{ total \}\}\)/);
+  assert.match(source, /@click="confirmAll\('reject'\)"[^>]*>.*Reject all \(\{\{ total \}\}\)/);
+});
+
+test('acting on all uses one server snapshot and drops it when the filters changed', () => {
+  const method = source.slice(source.indexOf('async confirmAll('), source.indexOf('observeLoadMore() {'));
+  assert.match(method, /\/api\/automation\/requests\/workflow\/pending/);
+  assert.match(method, /!== filters \|\| this\.bulkMode \|\| this\.confirmation \|\| this\.seenRatingItem\) return;/);
+  assert.match(method, /this\.confirmAction\(action, items,/);
+  assert.match(source, /confirmAction\(action, items = this\.selectedItems, note = ''\) \{/);
+});
+
+test('a page-one reload is never skipped and superseded list responses are dropped', () => {
+  const method = source.slice(source.indexOf('async load('), source.indexOf('observeLoadMore() {'));
+  assert.match(method, /if \(this\.loading && page !== 1\) return;/);
+  assert.match(method, /if \(seq !== this\.loadSeq\) return;/);
+});
+
+test('decisions go out in chunks and the dialog cannot be dismissed meanwhile', () => {
+  const method = source.slice(source.indexOf('async decide('), source.indexOf('async runJob('));
+  assert.match(method, /for \(const chunk of chunkIds\(ids\)\)/);
+  assert.ok(method.indexOf('this.confirmation.items') < method.indexOf('await'), 'confirmation is read before any await');
+  assert.match(source, /<AppDialog v-if="confirmation"[^>]*:busy="actionLoading"/);
+  assert.match(source, /:disabled="actionLoading" @click="confirmation = null">Cancel</);
+  const dialog = readFileSync(new URL('./ui/AppDialog.vue', import.meta.url), 'utf8');
+  assert.match(dialog, /@cancel="busy && \$event\.preventDefault\(\)"/);
+  assert.match(dialog, /if \(!this\.busy\) this\.\$refs\.dialog\.close\(\);/);
+});

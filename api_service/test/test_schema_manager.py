@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 
+import pytest
+
 from api_service.db.components.schema_manager import SchemaManager
 
 
@@ -33,6 +35,42 @@ class _MysqlDatabase:
     @contextmanager
     def get_connection(self):
         yield self.connection
+
+
+@pytest.mark.parametrize('has_generation', [True, False])
+def test_mysql_auth_migration_consumes_empty_prompt_result(has_generation):
+    database = _MysqlDatabase()
+    cursor = database.cursor
+    pending = False
+    auth_columns = [(name,) for name in (
+        'can_manage_ai', 'visible_tabs', 'seer_user_id', 'language', 'notify_config',
+        'ai_search_shareable', 'rating_prompt_config', 'rating_prompt_generation',
+    )]
+
+    def execute(sql):
+        nonlocal pending
+        assert not pending, 'Unread result found'
+        if sql.startswith('SHOW COLUMNS'):
+            pending = True
+        elif sql.startswith('SELECT * FROM rating_prompts'):
+            pending = True
+            cursor.description = [('id',)] + ([('generation',)] if has_generation else [])
+
+    def fetchall():
+        nonlocal pending
+        assert pending
+        pending = False
+        return auth_columns if cursor.execute.call_args.args[0].startswith('SHOW COLUMNS') else []
+
+    cursor.execute.side_effect = execute
+    cursor.fetchall.side_effect = fetchall
+    database.connection.commit.side_effect = lambda: pytest.fail('Unread result found') if pending else None
+
+    SchemaManager(database)._migrate_auth_users_table()
+
+    assert not pending
+    alterations = [call.args[0] for call in cursor.execute.call_args_list if call.args[0].startswith('ALTER')]
+    assert bool(alterations) is not has_generation
 
 
 def test_mysql_discover_jobs_migration_expands_legacy_filters_column():

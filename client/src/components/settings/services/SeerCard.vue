@@ -2,18 +2,18 @@
   <div :class="wizardMode ? '' : 'min-w-0 px-5 py-4 max-sm:px-4'">
     <ServiceCardHeader v-if="!wizardMode" icon="fas fa-paper-plane" title="Jellyseerr / Overseerr" description="Receives the requests. Approved titles are downloaded through Radarr and Sonarr from here." :status="getSeerStatus" :status-text="getSeerStatusText" :folded="isFolded(getSeerStatus)" :summary="localConfig.SEER_API_URL" @toggle="editing = !editing" />
     <div v-show="!isFolded(getSeerStatus)">
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
         <label for="seerApiUrl">API URL</label>
         <input id="seerApiUrl" v-model="localConfig.SEER_API_URL" type="url" placeholder="http://localhost:5055" class="ui-input" :disabled="isLoading" @input="onSeerConfigChange" />
       </div>
 
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
         <label for="seerExternalUrl">External URL</label>
         <input id="seerExternalUrl" v-model="localConfig.SEER_EXTERNAL_URL" type="url" placeholder="https://requests.example.com" class="ui-input" :disabled="isLoading" />
         <span class="text-xs text-ink-4">Optional. The address your browser uses, for links in SuggestArr, when the URL above is internal (e.g. a Docker name).</span>
       </div>
 
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
         <label for="seerToken">API token</label>
         <div class="flex gap-2">
           <input
@@ -45,7 +45,7 @@
       <!-- Request settings -->
       <div v-if="seerConnected" class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
         <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(seerAdvancedExpanded)" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
-          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
+          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[0.8125rem] text-ink-3"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-semibold text-ink">Request settings</span>
             <span class="block text-xs text-ink-4">{{ seerAuthenticated ? `As ${selectedSeerUser}` : 'As the admin account' }} · {{ localConfig.SEER_REQUEST_DELAY ?? 2 }}s between requests</span>
@@ -54,7 +54,7 @@
         </button>
         <div v-show="seerAdvancedExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
           <section class="p-4">
-            <h4 class="m-0 text-[13px] font-bold text-ink"><label for="seerRequestDelay">Delay between requests</label></h4>
+            <h4 class="m-0 text-[0.8125rem] font-bold text-ink"><label for="seerRequestDelay">Delay between requests</label></h4>
             <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Raise it if Seer's notifications hit rate limits. 0 sends everything at once.</p>
             <div class="flex max-w-[180px] items-center gap-2">
               <input id="seerRequestDelay" v-model.number="localConfig.SEER_REQUEST_DELAY" type="number" min="0" max="60" class="ui-input" :disabled="isLoading" />
@@ -63,7 +63,7 @@
           </section>
 
           <section class="p-4">
-            <h4 class="m-0 text-[13px] font-bold text-ink">Request as a local user</h4>
+            <h4 class="m-0 text-[0.8125rem] font-bold text-ink">Request as a local user</h4>
             <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Sign in as a Seer local user so requests are made on their behalf instead of the admin account.</p>
             <div v-if="seerUsers.length > 0" class="flex gap-2 max-sm:flex-col">
               <select v-model="selectedSeerUser" class="ui-input flex-1" aria-label="Seer user" :disabled="isLoading" @change="onSeerUserChange(selectedSeerUser)">
@@ -82,12 +82,12 @@
                 {{ seerAuthenticated ? 'Signed in' : 'Sign in' }}
               </button>
             </div>
-            <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No local users found. Requests use the admin account.</p>
+            <p v-else class="m-0 flex items-center gap-2 text-[0.8125rem] text-ink-3">No local users found. Requests use the admin account.</p>
           </section>
 
           <section class="p-4">
             <div class="flex items-baseline justify-between gap-3">
-              <h4 class="m-0 text-[13px] font-bold text-ink">Download profiles</h4>
+              <h4 class="m-0 text-[0.8125rem] font-bold text-ink">Download profiles</h4>
               <button type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" :disabled="loadingServers" @click="fetchArrServers">
                 <i aria-hidden="true" :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
                 {{ loadingServers ? 'Loading…' : (serversLoaded ? 'Reload' : 'Load servers') }}
@@ -97,7 +97,7 @@
 
             <div v-if="profileCards.length > 0" class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
               <fieldset v-for="card in profileCards" :key="card.key" class="m-0 flex min-w-0 flex-col gap-3 rounded-ctl border bg-canvas p-3.5" :class="card.anime ? 'border-anime/30' : 'border-edge'">
-                <legend class="flex items-center gap-1.5 p-0 text-[13px] font-bold" :class="card.anime ? 'text-anime' : 'text-ink [&>i]:text-ink-4'"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
+                <legend class="flex items-center gap-1.5 p-0 text-[0.8125rem] font-bold" :class="card.anime ? 'text-anime' : 'text-ink [&>i]:text-ink-4'"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
                 <label class="ui-label">Server
                   <select :value="$data[card.key + 'ServerId'] ?? ''" class="ui-input" :disabled="isLoading" @change="card.onServer($event.target.value || null)">
                     <option value="">Seer default</option>
@@ -118,7 +118,7 @@
                 </label>
               </fieldset>
             </div>
-            <p v-else-if="serversLoaded" class="m-0 flex items-center gap-2 text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>No Radarr or Sonarr servers found in Seer.</p>
+            <p v-else-if="serversLoaded" class="m-0 flex items-center gap-2 text-[0.8125rem] text-ink-3"><i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>No Radarr or Sonarr servers found in Seer.</p>
           </section>
         </div>
       </div>

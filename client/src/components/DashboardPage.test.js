@@ -32,7 +32,7 @@ test('saving a section never copies the redacted-secret sentinel into the live c
 test('only the newest badge count may write the badge', () => {
   // An approval event and a tab switch can start overlapping counts; an older,
   // slower answer must not overwrite a newer one.
-  const method = source.slice(source.indexOf('async loadRequestCount()'), source.indexOf('async showChangelog()'));
+  const method = source.slice(source.indexOf('async loadRequestCount()'), source.indexOf('async saveSection('));
   assert.match(method, /const call = \+\+this\.requestCountCall;/);
   const writes = method.match(/this\.requestCount = [^;]+;/g);
   assert.ok(writes.length >= 2);

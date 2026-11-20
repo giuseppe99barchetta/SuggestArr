@@ -5,7 +5,37 @@ from typing import Any, Dict, List, Optional, Set
 
 from api_service.db.components.suggestion_ownership import ownership_clause, payload_user_expression
 
+
+def _media_user_name_sql(ph):
+    """Query for a media user's display name; users.user_name falls back to the raw id, so that is skipped."""
+    return (f"SELECT user_name FROM users WHERE user_id={ph} AND user_name<>user_id AND user_name IS NOT NULL "
+            f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
+            f"AND external_username IS NOT NULL "
+            f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
+            f"AND external_username IS NOT NULL LIMIT 1")
+
+
 class RequestQueueMixin:
+    def purge_stale_submission_locks(self, ttl_seconds: int = 3600) -> int:
+        """Delete submission locks older than ``ttl_seconds`` for every title (crash leftovers).
+
+        Locks are written and compared with the database clock, as in :meth:`try_acquire_submission_lock`.
+
+        :param ttl_seconds: Age limit in seconds.
+        :return: Number of rows deleted.
+        """
+        if self.db_type == 'sqlite':
+            query, params = "DELETE FROM submission_locks WHERE locked_at < datetime('now', '-' || ? || ' seconds')", (str(ttl_seconds),)
+        elif self.db_type == 'postgres':
+            query, params = "DELETE FROM submission_locks WHERE locked_at < NOW() - (INTERVAL '1 second' * %s)", (ttl_seconds,)
+        else:  # mysql / mariadb
+            query, params = "DELETE FROM submission_locks WHERE locked_at < DATE_SUB(NOW(), INTERVAL %s SECOND)", (ttl_seconds,)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount
+
     def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
         """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
 
@@ -178,6 +208,8 @@ class RequestQueueMixin:
                     "delivery_id": delivery_id, "execution_id": execution_id, "tmdb_id": str(tmdb_id),
                     "media_type": media_type, "job_id": job_id, "status": status,
                 }
+                if payload.get('_rationale'):
+                    event_data["rationale"] = payload['_rationale']
                 try:
                     self.enqueue_webhook_event("suggestion.created", event_data)
                     if status == "awaiting_approval":
@@ -225,13 +257,13 @@ class RequestQueueMixin:
         if max_requests <= 0:
             return None
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, window_hours))).replace(tzinfo=None)
+        hours = max(1, window_hours)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT COUNT(*) FROM pending_requests WHERE job_id={ph} "
-                f"AND COALESCE(user_id, '')={ph} AND created_at >= {ph}",
-                (job_id, '' if user_id is None else str(user_id), cutoff),
+                f"AND COALESCE(user_id, '')={ph} AND created_at >= {self._db_clock_minus(hours, 'HOUR')}",
+                (job_id, '' if user_id is None else str(user_id), hours),
             )
             count = cursor.fetchone()[0]
         if count >= max_requests:
@@ -312,21 +344,14 @@ class RequestQueueMixin:
                     payload = json.loads(item.pop('payload') or '{}')
                 except (TypeError, json.JSONDecodeError):
                     payload = {}
+                item['backend'] = payload.get('_backend') or 'seer'  # rows queued before the field existed are Seer's
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
                 item['media_user_id'] = payload.get('_user_id')
                 item['rationale'] = payload.get('_rationale')
                 item['user_name'] = None
                 if item['media_user_id'] is not None:
-                    cursor.execute(
-                        # users.user_name falls back to the raw id when no name was known; skip it.
-                        f"SELECT user_name FROM users WHERE user_id={ph} AND user_name<>user_id AND user_name IS NOT NULL "
-                        f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
-                        f"AND external_username IS NOT NULL "
-                        f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
-                        f"AND external_username IS NOT NULL LIMIT 1",
-                        (str(item['media_user_id']),) * 3,
-                    )
+                    cursor.execute(_media_user_name_sql(ph), (str(item['media_user_id']),) * 3)
                     user = cursor.fetchone()
                     item['user_name'] = user[0] if user else None
                 item['feedback'] = (
@@ -353,14 +378,31 @@ class RequestQueueMixin:
         fields_by_type = {}
         for media_type, profile in (profiles or {}).items():
             fields = {key: value for key, value in (profile or {}).items()
-                      if key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                      if key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId', 'tags')
                       and value is not None}
             if fields:
                 fields_by_type[media_type] = fields
         return fields_by_type
 
+    def awaiting_backends(self, ids, owner_id, include_unassigned=False):
+        """Return the set of recorded delivery backends of the rows in ``ids`` still awaiting approval."""
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT payload FROM pending_requests WHERE status='awaiting_approval' "
+                           f"AND id IN ({marks}){owner_clause}", tuple([*ids, *owner_params]))
+            backends = set()
+            for (payload,) in cursor.fetchall():
+                try:
+                    backends.add((json.loads(payload) if payload else {}).get('_backend') or 'seer')
+                except (TypeError, ValueError):
+                    backends.add('seer')
+            return backends
+
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None,
-                           include_unassigned=False):
+                           include_unassigned=False, report=None, replace_rejected=False):
         """
         Approve or reject suggestions that are awaiting approval.
 
@@ -381,6 +423,12 @@ class RequestQueueMixin:
                         present fields through instead of Jellyseerr's defaults).
             include_unassigned: With ``owner_id``, also decide rows without
                         an owner (an admin under ``REQUEST_VISIBILITY=own_all``).
+            report:     Optional dict; receives ``ignored_overrides``, the number of
+                        direct-delivery rows that kept their own profile.
+            replace_rejected: On a rejection, open a pending replacement for each
+                        rejected direct-delivery row of a job, so the replacement
+                        cycle suggests one alternative (Seer rows are replaced from
+                        Seer's own decision instead).
 
         Returns:
             int: Number of rows whose status changed.
@@ -400,8 +448,10 @@ class RequestQueueMixin:
                            tuple(select_params))
             eligible = cursor.fetchall()
             if fields_by_type:
-                self._write_profiles_to_payloads(cursor, ph, marks, owner_clause,
-                                                 select_params, fields_by_type)
+                ignored = self._write_profiles_to_payloads(cursor, ph, marks, owner_clause,
+                                                           select_params, fields_by_type)
+                if report is not None:
+                    report['ignored_overrides'] = ignored
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
@@ -414,6 +464,8 @@ class RequestQueueMixin:
                     if self.db_type == 'postgres':
                         sql += " ON CONFLICT DO NOTHING"
                     cursor.execute(sql, (tmdb_id, media_type, decided_by))
+            if replace_rejected and not approve and eligible:
+                self._open_replacements_for_rejected(cursor, ph, [row[0] for row in eligible])
             conn.commit()
         event = "suggestion.approved" if approve else "suggestion.rejected"
         try:
@@ -425,6 +477,33 @@ class RequestQueueMixin:
         except Exception as exc:
             self.logger.error("Unable to queue %s webhook: %s", event, exc)
         return changed
+
+    def _open_replacements_for_rejected(self, cursor, ph, row_ids):
+        """Open a pending replacement for each rejected direct-delivery row that came from a job.
+
+        Runs on the caller's cursor; decide_suggestions commits it with the rejection.
+        A row rejected again after being requested again reopens its slot: an ``ignored``
+        slot never had an alternative delivered (none was generated, or it was cancelled),
+        so at most one alternative per delivery still holds.
+        """
+        marks = ','.join([ph] * len(row_ids))
+        cursor.execute(f"SELECT id,job_id,payload FROM pending_requests WHERE id IN ({marks})", tuple(row_ids))
+        insert = {'sqlite': 'INSERT OR IGNORE', 'postgres': 'INSERT'}.get(self.db_type, 'INSERT IGNORE')
+        sql = (f"{insert} INTO request_replacements(delivery_id,remote_status,status,reason) "
+               f"VALUES ({ph},3,'pending','Rejected in SuggestArr; awaiting an alternative')")
+        if self.db_type == 'postgres':
+            sql += " ON CONFLICT DO NOTHING"
+        reopen = ("UPDATE request_replacements SET status='pending',replacement_delivery_id=NULL,"
+                  "reason='Rejected in SuggestArr; awaiting an alternative',checked_at=CURRENT_TIMESTAMP "
+                  f"WHERE delivery_id={ph} AND status='ignored'")
+        for row_id, job_id, payload in cursor.fetchall():
+            try:
+                backend = (json.loads(payload) if payload else {}).get('_backend') or 'seer'
+            except (TypeError, ValueError):
+                continue
+            if backend == 'arr' and job_id is not None:
+                cursor.execute(sql, (row_id,))
+                cursor.execute(reopen, (row_id,))
 
     @staticmethod
     def _write_profiles_to_payloads(cursor, ph, marks, owner_clause, select_params, fields_by_type):
@@ -441,6 +520,11 @@ class RequestQueueMixin:
             owner_clause:   Owner restriction, possibly empty.
             select_params:  Ids followed by the owner, if any.
             fields_by_type: Output of _profile_fields_by_media_type().
+
+        Returns:
+            int: Rows left untouched because the profile is for the other backend:
+            a Seer-shape profile (with ``serverId``) only applies to rows delivered
+            by Seer, a Radarr/Sonarr-shape one only to direct-delivery rows.
         """
         cursor.execute(f"SELECT id,media_type,payload FROM pending_requests "
                        f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
@@ -448,6 +532,7 @@ class RequestQueueMixin:
         # media_type per row, not per call: a bulk approval may mix movies and
         # series, and a quality profile id from Radarr means something else in
         # Sonarr.
+        ignored = 0
         for row_id, media_type, payload in cursor.fetchall():
             fields = fields_by_type.get(media_type)
             if not fields:
@@ -456,10 +541,25 @@ class RequestQueueMixin:
                 data = json.loads(payload) if payload else {}
             except (TypeError, ValueError):
                 continue
+            if ((data.get('_backend') or 'seer') == 'seer') != (fields.get('serverId') is not None):
+                ignored += 1
+                continue
             data.update(fields)
             cursor.execute(f"UPDATE pending_requests SET payload={ph} "
                            f"WHERE id={ph} AND status='awaiting_approval'",
                            (json.dumps(data), row_id))
+        return ignored
+
+    def get_media_user_name(self, media_user_id):
+        """Return the display name of a media user, or None when only the id is known."""
+        if media_user_id is None:
+            return None
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(_media_user_name_sql(ph), (str(media_user_id),) * 3)
+            row = cursor.fetchone()
+            return row[0] if row else None
 
     def has_pending_approvals(self, job_id) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
@@ -469,16 +569,33 @@ class RequestQueueMixin:
                            (job_id,))
             return cursor.fetchone() is not None
 
+    def _db_clock_minus(self, amount: int, unit: str) -> str:
+        """
+        SQL for "now minus ``amount`` ``unit``" on the database's own clock.
+
+        ``pending_requests.created_at`` is filled by CURRENT_TIMESTAMP, which on PostgreSQL
+        and MySQL is the session's local time, so the cutoff must use the same clock.
+        The expression takes one bound parameter: ``amount``.
+
+        :param amount: Number of hours or days (bound as a parameter).
+        :param unit: 'HOUR' or 'DAY'.
+        :return: SQL expression with one placeholder.
+        """
+        if self.db_type == 'sqlite':
+            return f"datetime('now', '-' || ? || ' {unit.lower()}s')"
+        if self.db_type == 'postgres':
+            return f"NOW() - (INTERVAL '1 {unit.lower()}' * %s)"
+        return f"DATE_SUB(NOW(), INTERVAL %s {unit})"
+
     def expire_pending_approvals(self, days: int) -> int:
         if days <= 0:
             return 0
-        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
                            f"last_error='Automatically rejected after approval timeout' "
-                           f"WHERE status='awaiting_approval' AND created_at < {ph}", (cutoff,))
+                           f"WHERE status='awaiting_approval' AND created_at < {self._db_clock_minus(days, 'DAY')}",
+                           (int(days),))
             changed = cursor.rowcount
             conn.commit()
             return changed
@@ -493,7 +610,7 @@ class RequestQueueMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL,"
-                           f"last_attempt_at=NULL,last_error=NULL "
+                           f"last_attempt_at=NULL,last_error=NULL,unavailable_since=NULL "
                            f"WHERE status='failed' AND id IN ({marks}){owner_clause}", tuple(params))
             conn.commit()
             return cursor.rowcount
@@ -510,12 +627,37 @@ class RequestQueueMixin:
             cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
                            f"AND id IN ({marks}){owner_clause}", tuple(params))
             eligible = cursor.fetchall()
+            # The title itself is requested again, so its alternative must not be delivered too.
+            # Pending replacements are closed first (a concurrent generation can no longer claim
+            # them); an alternative already queued is cancelled while it has not been sent. One
+            # already sending or sent stays: requesting the original then is an explicit choice.
+            cursor.execute(f"UPDATE request_replacements SET status='ignored',"
+                           f"reason='Requested again; no alternative needed',checked_at=CURRENT_TIMESTAMP "
+                           f"WHERE status='pending' AND delivery_id IN (SELECT id FROM pending_requests "
+                           f"WHERE status='rejected' AND id IN ({marks}){owner_clause})", tuple(params))
+            prefixed_clause, _ = ownership_clause(self.db_type, owner_id, include_unassigned, prefix='p.')
+            cursor.execute(f"SELECT r.replacement_delivery_id FROM request_replacements r "
+                           f"JOIN pending_requests p ON p.id=r.delivery_id WHERE p.status='rejected' "
+                           f"AND r.replacement_delivery_id IS NOT NULL AND p.id IN ({marks}){prefixed_clause}",
+                           tuple(params))
+            alternatives = [row[0] for row in cursor.fetchall()]
+            if alternatives:
+                alt_marks = ','.join([ph] * len(alternatives))
+                cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
+                               f"last_error='Cancelled: the original title was requested again' "
+                               f"WHERE status IN ('awaiting_approval','queued') AND id IN ({alt_marks})",
+                               tuple(alternatives))
+                cursor.execute(f"UPDATE request_replacements SET status='ignored',"
+                               f"reason='Requested again; alternative cancelled',checked_at=CURRENT_TIMESTAMP "
+                               f"WHERE replacement_delivery_id IN (SELECT id FROM pending_requests WHERE "
+                               f"status='rejected' AND id IN ({alt_marks}))", tuple(alternatives))
             if remove_blacklist:
                 for tmdb_id, media_type in eligible:
                     cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",
                                    (tmdb_id, media_type))
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,last_error=NULL,"
-                           f"next_attempt_at=NULL WHERE status='rejected' AND id IN ({marks}){owner_clause}",
+                           f"next_attempt_at=NULL,unavailable_since=NULL "
+                           f"WHERE status='rejected' AND id IN ({marks}){owner_clause}",
                            tuple(params))
             conn.commit()
             return cursor.rowcount
@@ -560,18 +702,22 @@ class RequestQueueMixin:
     def get_due_requests(self, max_items: int = 50) -> List[Dict[str, Any]]:
         """Return up to *max_items* queued rows whose next_attempt_at is due.
 
+        Rows never attempted come first, then the least recently attempted, so rows waiting for an
+        unreachable backend cannot monopolize a batch and starve the ones for a working backend.
+
         :param max_items: Maximum number of rows to return.
-        :return: List of row dicts ordered by created_at ASC.
+        :return: List of row dicts, never-attempted first, then oldest attempt, then oldest created.
         """
         now = self._utc_naive(datetime.now(timezone.utc))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
-            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id
+            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id,
+                   unavailable_since
             FROM pending_requests
             WHERE status = 'queued'
               AND (next_attempt_at IS NULL OR next_attempt_at <= {placeholder})
-            ORDER BY created_at ASC
+            ORDER BY CASE WHEN last_attempt_at IS NULL THEN 0 ELSE 1 END, last_attempt_at, created_at ASC
             LIMIT {placeholder}
         """
 
@@ -591,7 +737,7 @@ class RequestQueueMixin:
         """Internal helper - update status / retry columns on a pending_requests row."""
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
-                 f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
+                 f", last_attempt_at={placeholder}, next_attempt_at={placeholder}, unavailable_since=NULL"
                  f" WHERE id={placeholder}")
         db_last = self._utc_naive(last_attempt_at) if last_attempt_at is not None else None
         db_next = self._utc_naive(next_attempt_at) if next_attempt_at is not None else None
@@ -604,14 +750,59 @@ class RequestQueueMixin:
         except Exception as e:
             self.logger.error("Failed to update pending_requests row %s: %s", row_id, e)
 
-    def mark_pending_submitting(self, row_id: int, retry_count: int) -> None:
-        """Mark a row as in-flight so concurrent workers skip it.
+    def mark_pending_unavailable(self, row_id: int, next_attempt_at: datetime, error: str) -> bool:
+        """Keep a row queued because its backend could not be reached; the retry count is not touched.
+
+        ``unavailable_since`` is set on the first outage only and cleared by every other state change, so it
+        measures continuous unavailability. Both datetimes are written by Python, never by the database clock.
+
+        :param row_id: Primary key of the pending_requests row.
+        :param next_attempt_at: Naive UTC time of the next eligible attempt.
+        :param error: Short reason shown on the row.
+        :return: True when the row was updated; False when it is no longer queued or sending (for example it
+            was cancelled or rejected meanwhile) and was therefore left untouched.
+        """
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE pending_requests SET status='queued', last_attempt_at={ph}, "
+                               f"next_attempt_at={ph}, last_error={ph}, "
+                               f"unavailable_since=COALESCE(unavailable_since, {ph}) "
+                               f"WHERE id={ph} AND status IN ('queued','submitting')",
+                               (now, next_attempt_at, error[:500], now, row_id))
+                updated = cursor.rowcount == 1
+                conn.commit()
+                return updated
+        except Exception as e:
+            self.logger.error("Failed to mark pending_requests row %s unavailable: %s", row_id, e)
+            return False
+
+    def mark_pending_submitting(self, row_id: int, retry_count: int) -> bool:
+        """Claim a queued row for delivery, so concurrent workers and cancellations skip it.
+
+        The claim only succeeds while the row is still ``queued``: a row rejected or
+        cancelled after the worker read it (e.g. an alternative cancelled because its
+        original was requested again) is never brought back to life.
 
         :param row_id: Primary key of the pending_requests row.
         :param retry_count: Current retry count (unchanged at this point).
+        :return: True when this caller claimed the row and may deliver it.
         """
-        self._update_pending_status(row_id, 'submitting', retry_count,
-                                    last_attempt_at=datetime.now(timezone.utc))
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE pending_requests SET status='submitting', retry_count={ph}, "
+                               f"last_attempt_at={ph}, next_attempt_at=NULL WHERE id={ph} AND status='queued'",
+                               (retry_count, datetime.now(timezone.utc).replace(tzinfo=None), row_id))
+                claimed = cursor.rowcount == 1
+                conn.commit()
+                return claimed
+        except Exception as e:
+            self.logger.error("Failed to claim pending_requests row %s: %s", row_id, e)
+            return False
 
     def mark_pending_submitted(self, row_id: int, retry_count: int) -> None:
         """Mark a row as successfully submitted.

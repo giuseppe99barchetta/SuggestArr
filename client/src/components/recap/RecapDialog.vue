@@ -31,7 +31,7 @@
           <button type="button" :class="[glassButton, panel ? 'bg-white/25' : '']" aria-label="Share recap" :aria-expanded="panel" @click="panel = !panel"><i aria-hidden="true" class="fas fa-share-alt"></i></button>
         </div>
       </div>
-      <p class="m-0 flex items-center gap-2 text-[11px] text-white/50"><i aria-hidden="true" class="fas fa-lock text-[10px]"></i>Made on your device. Server details stay private.</p>
+      <p class="m-0 flex items-center gap-2 text-[0.6875rem] text-white/50"><i aria-hidden="true" class="fas fa-lock text-[0.625rem]"></i>Made on your device. Server details stay private.</p>
     </div>
 
     <Transition enter-from-class="max-md:translate-y-full md:translate-x-full" leave-to-class="max-md:translate-y-full md:translate-x-full" enter-active-class="transition-transform duration-200 ease-out motion-reduce:transition-none" leave-active-class="transition-transform duration-150 ease-in motion-reduce:transition-none">

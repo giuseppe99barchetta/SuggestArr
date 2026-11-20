@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict
 
-from api_service.config.config import load_env_vars
+from api_service.config.config import load_env_vars, normalize_db_type  # noqa: F401  (re-exported)
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
 
@@ -66,7 +66,7 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.db_path = DB_PATH
         self.env_vars = load_env_vars()
-        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
+        self.db_type = normalize_db_type(self.env_vars.get('DB_TYPE'))
         self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
         self.initialize_db()
         # Only mark as initialized after a successful initialize_db() call so
@@ -81,7 +81,7 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         database connections without requiring a full process restart.
         """
         self.env_vars = load_env_vars(force_reload=True)
-        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
+        self.db_type = normalize_db_type(self.env_vars.get('DB_TYPE'))
         self.logger.debug(f"DatabaseManager config refreshed (db_type={self.db_type})")
         self.initialize_db()
 
@@ -164,17 +164,11 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         """Initialize and migrate the configured database schema."""
         return SchemaManager(self).initialize_db()
 
-    def ensure_connection(self):
-        """Legacy method - now handled by connection pool."""
-        # This method is kept for backward compatibility
-        # Connection pooling handles connection management automatically
-        pass
-    
     def test_connection(self, db_config: Dict[str, Any]) -> Dict[str, str]:
         """Test database connection based on provided db_config."""
         
         try:
-            db_type = db_config.get('DB_TYPE', 'sqlite')
+            db_type = normalize_db_type(db_config.get('DB_TYPE'))
 
             if db_type == 'postgres':
                 conn = psycopg2.connect(
@@ -207,10 +201,3 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
             self.logger.error(f"Error testing database connection: {str(e)}")
             return {'status': 'error', 'message': f"Error testing database connection: {str(e)}"}
     
-    def get_pool_stats(self) -> Dict[str, Any]:
-        """Get connection pool statistics."""
-        return {
-            'status': 'direct_connection',
-            'db_type': self.db_type,
-            'message': 'No connection pooling - using direct connections for better performance'
-        }

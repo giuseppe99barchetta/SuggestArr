@@ -1,17 +1,17 @@
 import os
 from flask import Blueprint, request, jsonify
-import yaml
 import requests
 from api_service.auth.middleware import require_role
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
-    get_config_sections, get_config_section, save_config_section, INTEGRATION_TO_FLAT,
+    get_config_section, save_config_section, INTEGRATION_TO_FLAT,
     is_setup_complete
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.integration_security import bind_flat_credentials
+from api_service.utils.ssrf_guard import validate_url
 from api_service.services.config_secrets import merge_integration_config
 
 logger = LoggerManager.get_logger("ConfigRoute")
@@ -20,7 +20,7 @@ config_bp = Blueprint('config', __name__)
 # Keys whose plaintext values must never appear in API responses.
 _SECRET_KEYS = frozenset({
     'TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY',
-    'PLEX_TOKEN', 'JELLYFIN_TOKEN',
+    'PLEX_TOKEN', 'JELLYFIN_TOKEN', 'RADARR_TOKEN', 'SONARR_TOKEN',
     'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
     'DB_PASSWORD',
     'OPENAI_API_KEY',
@@ -81,11 +81,6 @@ def _sync_integrations_from_flat(db, flat: dict) -> None:
     for service, changes in service_updates.items():
         existing = db.get_integration(service) or {}
         db.set_integration(service, merge_integration_config(service, changes, existing))
-
-
-def _redact_config(config: dict) -> dict:
-    """Return a copy of config with non-empty secret values replaced by '***'."""
-    return {k: (_REDACTED if k in _SECRET_KEYS and v else v) for k, v in config.items()}
 
 
 def _merge_secrets(incoming: dict, existing: dict) -> dict:
@@ -373,77 +368,6 @@ def set_log_level():
         logger.error(f'Error setting log level: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error setting log level', 'status': 'error'}), 500
 
-@config_bp.route('/pool-stats', methods=['GET'])
-@require_role('admin')
-def get_pool_statistics():
-    """
-    Get database connection pool statistics.
-    """
-    try:
-        db_manager = DatabaseManager()
-        pool_stats = db_manager.get_pool_stats()
-        all_stats = {'status': 'direct_connection', 'message': 'Connection pooling has been removed for better performance'}
-        
-        return jsonify({
-            'message': 'Connection pool statistics retrieved successfully',
-            'current_pool': pool_stats,
-            'all_pools': all_stats,
-            'status': 'success'
-        }), 200
-    except Exception as e:
-        logger.error(f'Error getting pool statistics: {str(e)}', exc_info=True)
-        return jsonify({'message': 'Error getting pool statistics', 'status': 'error'}), 500
-
-@config_bp.route('/force_run', methods=['POST'])
-@require_role('admin')
-def force_run_automation():
-    """
-    Force run the automation script immediately.
-    """
-    try:
-        from api_service.utils.utils import execute_automation
-        logger.info("Force run automation script requested")
-        
-        # Execute automation in background
-        execute_automation(force_run=True)
-        
-        return jsonify({
-            'message': 'Automation script forced successfully!',
-            'status': 'success'
-        }), 200
-    except Exception as e:
-        logger.error(f'Error forcing automation run: {str(e)}', exc_info=True)
-        return jsonify({'message': 'Error forcing automation run', 'status': 'error'}), 500
-
-@config_bp.route('/test-db', methods=['POST'])
-@require_role('admin')
-def test_database_connection():
-    """
-    Test database connection with current configuration.
-    """
-    try:
-        config = load_env_vars()
-        db_config = {
-            'DB_TYPE': config.get('DB_TYPE', 'sqlite'),
-            'DB_HOST': config.get('DB_HOST'),
-            'DB_PORT': config.get('DB_PORT'),
-            'DB_USER': config.get('DB_USER'),
-            'DB_PASSWORD': config.get('DB_PASSWORD'),
-            'DB_NAME': config.get('DB_NAME'),
-            'DB_PATH': os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'config_files', 'requests.db')
-        }
-        
-        db_manager = DatabaseManager()
-        result = db_manager.test_connection(db_config)
-        
-        return jsonify(result), 200
-    except Exception as e:
-        logger.error(f'Error testing database connection: {str(e)}', exc_info=True)
-        return jsonify({
-            'message': 'Error testing database connection',
-            'status': 'error'
-        }), 500
-
 @config_bp.route('/docker-info', methods=['GET'])
 def get_docker_info():
     """
@@ -480,42 +404,6 @@ def get_docker_info():
                     }), 200
             except Exception as e:
                 logger.warning(f'Metadata file read error: {e}')
-        
-        try:
-            import requests
-            container_id = os.environ.get('HOSTNAME', '').split('.')[0]
-            
-            if container_id:
-                sock_url = f"http://unix:///var/run/docker.sock:2375/containers/{container_id}/json"
-                response = requests.get(
-                    sock_url,
-                    timeout=5,
-                    headers={'Accept': 'application/json'}
-                )
-                
-                if response.status_code == 200:
-                    container_info = response.json()
-                    
-                    labels = container_info.get('Config', {}).get('Labels', {})
-                    docker_tag = labels.get('DOCKER_TAG') or labels.get('org.opencontainers.image.version')
-                    
-                    if not docker_tag:
-                        image_name = container_info.get('Config', {}).get('Image', '')
-                        if ':' in image_name:
-                            docker_tag = image_name.split(':')[-1]
-                        else:
-                            docker_tag = 'latest'
-                    
-                    logger.info(f'Docker info from socket: tag={docker_tag}')
-                    return jsonify({
-                        'tag': docker_tag or 'latest',
-                        'build_date': labels.get('BUILD_DATE'),
-                        'source': 'docker_socket',
-                        'status': 'success'
-                    }), 200
-                    
-        except Exception as e:
-            logger.debug(f'Docker socket failed: {e}')
         
         logger.debug('Docker info fallback: latest')
         return jsonify({
@@ -597,153 +485,140 @@ def export_config():
         return jsonify({'message': 'Error exporting configuration', 'status': 'error'}), 500
 
 
-@config_bp.route('/openai/user', methods=['GET'])
-def get_user_openai_config():
-    """
-    Get the current user's OpenAI configuration (if any).
-    
-    Users with can_manage_ai permission can view their own OpenAI settings.
-    Returns masked API key (first 8 chars + ...) and base URL.
-    
-    Returns:
-        200 JSON with openai_api_key (masked) and openai_base_url
-        403 if user lacks can_manage_ai permission
-        404 if no user config exists (user should use global config)
-    """
+def _ai_manager_id():
+    """Return ``(account id, None)`` for a caller allowed to manage their own AI provider, else ``(None, error response)``."""
     from flask import g
     current_user = getattr(g, 'current_user', None)
     if not current_user:
-        return jsonify({'error': 'Authentication required'}), 401
-    
-    if not current_user.get('can_manage_ai'):
-        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
-    
+        return None, (jsonify({'error': 'Authentication required'}), 401)
+    if current_user.get('role') != 'admin' and not current_user.get('can_manage_ai'):
+        return None, (jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403)
     try:
-        user_id = int(current_user['id'])
-        db = DatabaseManager()
-        
-        # Get OpenAI config from user_media_profiles
-        token = db.get_user_media_profile_token(user_id, 'openai')
-        
-        if not token:
-            return jsonify({'status': 'not_configured', 'message': 'No user-specific OpenAI config'}), 404
-        
-        # Token is stored as JSON: {"api_key": "...", "base_url": "..."}
-        import json
-        try:
-            config_data = json.loads(token)
-            api_key = config_data.get('api_key', '')
-            base_url = config_data.get('base_url', '')
-            
-            # Mask the API key for security
-            masked_key = api_key[:8] + '...' if len(api_key) > 8 else '***'
-            
-            return jsonify({
-                'status': 'success',
-                'openai_api_key': masked_key,
-                'openai_base_url': base_url
-            }), 200
-        except json.JSONDecodeError:
-            return jsonify({'error': 'Invalid stored configuration'}), 500
-            
-    except Exception as e:
-        logger.error(f'Error retrieving user OpenAI config: {e}', exc_info=True)
-        return jsonify({'error': 'Failed to retrieve OpenAI configuration'}), 500
+        return int(current_user['id']), None
+    except (TypeError, ValueError):
+        return None, (jsonify({'error': 'This account cannot hold personal settings'}), 403)
+
+
+def _mask_secret(secret: str) -> str:
+    """Show only the end of a key, enough to recognise it."""
+    return '****' + secret[-4:] if len(secret) > 8 else '****'
+
+
+@config_bp.route('/openai/user', methods=['GET'])
+def get_user_openai_config():
+    """
+    Return the caller's own AI provider (key masked), if they set one.
+
+    Administrators and accounts with ``can_manage_ai`` may have one; everyone else uses the shared provider
+    set up by the administrator.
+
+    Returns:
+        200 JSON with openai_api_key (masked), openai_base_url and llm_model
+        401/403 when the caller may not manage AI settings
+        404 when no personal provider exists (the shared one is used)
+    """
+    user_id, error = _ai_manager_id()
+    if error:
+        return error
+    from api_service.services.llm.llm_service import personal_llm_settings
+    stored = personal_llm_settings(user_id)
+    if not stored:
+        return jsonify({'status': 'not_configured', 'message': 'No personal AI provider: the shared one is used'}), 404
+    return jsonify({
+        'status': 'success',
+        'openai_api_key': _mask_secret(stored['api_key']) if stored['api_key'] else '',
+        'openai_base_url': stored['base_url'],
+        'llm_model': stored['model'],
+    }), 200
 
 
 @config_bp.route('/openai/user', methods=['POST'])
 def save_user_openai_config():
     """
-    Save the current user's OpenAI configuration.
-    
-    Only users with can_manage_ai=1 can save their own OpenAI settings.
-    Stores api_key and base_url in user_media_profiles with provider='openai'.
-    
+    Save the caller's own AI provider.
+
+    A new provider replaces the previous one as a whole. When ``openai_api_key`` is left out and the address
+    is unchanged, the saved key is kept, so the model or address can be edited without retyping the key.
+
     Request JSON:
-      openai_api_key (str, optional) - OpenAI API key
-      openai_base_url (str, optional) - OpenAI base URL (for local providers)
-      
-    At least one field must be provided.
-    
+      openai_api_key (str, optional) - API key (not needed for a local provider)
+      openai_base_url (str, optional) - address of an OpenAI-compatible provider
+      llm_model (str, optional) - model name; the shared model setting is used when empty
+    At least a key or an address is required.
+
     Returns:
-        200 on success
-        400 if invalid input
-        403 if user lacks can_manage_ai permission
+        200 on success, 400 on invalid input, 401/403 when the caller may not manage AI settings
     """
-    from flask import g
-    current_user = getattr(g, 'current_user', None)
-    if not current_user:
-        return jsonify({'error': 'Authentication required'}), 401
-    
-    if not current_user.get('can_manage_ai'):
-        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
-    
+    user_id, error = _ai_manager_id()
+    if error:
+        return error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    fields = {}
+    for name, limit in (('openai_api_key', 512), ('openai_base_url', 512), ('llm_model', 128)):
+        value = data.get(name, '')
+        if value is None:
+            value = ''
+        if not isinstance(value, str) or len(value.strip()) > limit:
+            return jsonify({'error': f'{name} must be a string of at most {limit} characters'}), 400
+        fields[name] = value.strip()
+    base_url = fields['openai_base_url']
+    if base_url:
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+            return jsonify({'error': 'openai_base_url must be an http(s) address'}), 400
+        try:
+            # Only an administrator may point the server at a private address (a local model on the LAN).
+            from flask import g
+            validate_url(base_url, allow_private=g.current_user.get('role') == 'admin')
+        except ValueError as exc:
+            logger.info('Refused personal AI address: %s', exc)
+            return jsonify({'error': 'openai_base_url could not be resolved or points to a non-public address'}), 400
+
+    from api_service.services.llm.llm_service import personal_llm_settings
+    saved = personal_llm_settings(user_id)
+    api_key = fields['openai_api_key']
+    if not api_key and saved and saved['base_url'] == base_url:
+        api_key = saved['api_key']  # editing the model only: keep the key
+    if not api_key and not base_url:
+        return jsonify({'error': 'At least one of openai_api_key or openai_base_url must be provided'}), 400
     try:
-        data = request.get_json(silent=True) or {}
-        api_key = data.get('openai_api_key', '').strip()
-        base_url = data.get('openai_base_url', '').strip()
-        
-        if not api_key and not base_url:
-            return jsonify({'error': 'At least one of openai_api_key or openai_base_url must be provided'}), 400
-        
-        user_id = int(current_user['id'])
-        db = DatabaseManager()
-        
-        # Store as JSON in access_token field
         import json
-        config_json = json.dumps({
-            'api_key': api_key,
-            'base_url': base_url
-        })
-        
-        # Use external_user_id and external_username as placeholders
-        db.create_user_media_profile(
+        from flask import g
+        DatabaseManager().create_user_media_profile(
             user_id=user_id,
             provider='openai',
             external_user_id=str(user_id),
-            external_username=current_user.get('username', 'user'),
-            access_token=config_json
+            external_username=g.current_user.get('username', 'user'),
+            access_token=json.dumps({'api_key': api_key, 'base_url': base_url, 'model': fields['llm_model']}),
         )
-        
-        logger.info(f"User {current_user.get('username')} saved personal OpenAI configuration")
-        return jsonify({'status': 'success', 'message': 'OpenAI configuration saved'}), 200
-        
     except Exception as e:
         logger.error(f'Error saving user OpenAI config: {e}', exc_info=True)
-        return jsonify({'error': 'Failed to save OpenAI configuration'}), 500
+        return jsonify({'error': 'Failed to save AI provider'}), 500
+    logger.info("User %s saved a personal AI provider", user_id)
+    return jsonify({'status': 'success', 'message': 'AI provider saved'}), 200
 
 
 @config_bp.route('/openai/user', methods=['DELETE'])
 def delete_user_openai_config():
     """
-    Delete the current user's OpenAI configuration.
-    
-    This will cause the user to fall back to the global admin OpenAI config.
-    
+    Delete the caller's own AI provider, so the shared one is used again.
+
     Returns:
-        200 on success
-        403 if user lacks can_manage_ai permission
+        200 on success, 401/403 when the caller may not manage AI settings
     """
-    from flask import g
-    current_user = getattr(g, 'current_user', None)
-    if not current_user:
-        return jsonify({'error': 'Authentication required'}), 401
-    
-    if not current_user.get('can_manage_ai'):
-        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
-    
+    user_id, error = _ai_manager_id()
+    if error:
+        return error
     try:
-        user_id = int(current_user['id'])
-        db = DatabaseManager()
-        
-        db.delete_user_media_profile(user_id, 'openai')
-        
-        logger.info(f"User {current_user.get('username')} deleted personal OpenAI configuration")
-        return jsonify({'status': 'success', 'message': 'OpenAI configuration deleted. Using global config.'}), 200
-        
+        DatabaseManager().delete_user_media_profile(user_id, 'openai')
     except Exception as e:
         logger.error(f'Error deleting user OpenAI config: {e}', exc_info=True)
-        return jsonify({'error': 'Failed to delete OpenAI configuration'}), 500
+        return jsonify({'error': 'Failed to delete AI provider'}), 500
+    logger.info("User %s deleted their personal AI provider", user_id)
+    return jsonify({'status': 'success', 'message': 'AI provider removed. The shared one is used.'}), 200
 
 
 @config_bp.route('/import', methods=['POST'])

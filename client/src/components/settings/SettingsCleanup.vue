@@ -4,7 +4,7 @@
 
     <div role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
-      <p class="m-0 text-sm text-ink-2"><strong class="block text-ink">Destructive action</strong>When enabled and not in dry-run, this asks Seer to delete the matched media files. Always run in dry-run first to verify the candidate list.</p>
+      <p class="m-0 text-sm text-ink-2"><strong class="block text-ink">Destructive action</strong>When enabled and not in dry-run, this deletes the matched media files: through Seer, or straight in Radarr/Sonarr with direct delivery, where only titles tagged suggestarr are ever deleted. Always run in dry-run first to verify the candidate list.</p>
     </div>
 
     <p v-if="loading" class="m-0 py-2 text-sm italic text-ink-4">Loading…</p>
@@ -61,6 +61,10 @@
       <div v-if="settings && settings.last_run_at" class="mt-3 text-sm text-ink-4">
         <span><strong>Last run:</strong> {{ formatTs(settings.last_run_at) }} · {{ settings.last_run_status || '—' }}</span>
         <div v-if="settings.last_run_summary" class="mt-1 font-mono text-[0.82rem]">{{ settings.last_run_summary }}</div>
+        <button v-if="settings.last_run_status === 'blocked_large_run'" type="button" class="ui-btn-danger mt-2" :disabled="running" @click="runNow(false, true)">
+          <i aria-hidden="true" :class="running && lastTrigger === 'real' ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+          Run anyway
+        </button>
       </div>
     </SectionCard>
 
@@ -141,7 +145,7 @@ export default {
       lastResult: null,
       toggles: [
         { key: 'enabled', icon: 'fas fa-power-off', title: 'Enable cleanup automation', hint: 'When off, no scans happen.' },
-        { key: 'dry_run', icon: 'fas fa-vial', title: 'Dry-run mode', hint: 'Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.' },
+        { key: 'dry_run', icon: 'fas fa-vial', title: 'Dry-run mode', hint: 'Logs which items would be deleted without touching files. Strongly recommended before flipping to real deletion.' },
       ],
     };
   },
@@ -189,14 +193,32 @@ export default {
       }
     },
 
-    async runNow(dryRun) {
+    async runNow(dryRun, confirmLarge = false) {
       if (this.running) return;
       this.running = true;
       this.lastTrigger = dryRun ? 'dry' : 'real';
       this.lastResult = null;
       try {
-        const res = await runCleanupNow(dryRun);
+        const res = await runCleanupNow(dryRun, confirmLarge);
         const r = res.data.result || {};
+        if (r.status === 'blocked_large_run') {
+          // The server stopped a suspiciously large deletion; let the admin confirm it explicitly.
+          this.lastResult = { status: 'error', message: r.message };
+          await this.loadSettings();
+          return;
+        }
+        if (r.status === 'completed_with_errors') {
+          this.lastResult = { status: 'error', message: `Run finished with errors (${dryRun ? 'dry-run' : 'real'}): ${r.summary}` };
+          await this.loadSettings();
+          await this.loadLog();
+          return;
+        }
+        if (r.status && r.status !== 'ok') {
+          // not_configured, unsupported, error, skipped: nothing ran, so do not show a green "complete".
+          this.lastResult = { status: 'error', message: r.message || `Cleanup did not run (${r.status}).` };
+          await this.loadSettings();
+          return;
+        }
         this.lastResult = { status: 'success', message: `Run complete (${dryRun ? 'dry-run' : 'real'}): ${r.summary || r.message || 'done'}` };
         await this.loadSettings();
         await this.loadLog();

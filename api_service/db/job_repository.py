@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.cascading_delete import delete_cascading
 from api_service.db.database_manager import DatabaseManager
 
 
@@ -446,8 +447,62 @@ class JobRepository:
             cursor.execute(query, ('running', datetime.now().isoformat(), execution_id))
             conn.commit()
 
+    _HISTORY_SELECT = (
+        "SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status, h.results_count, h.requested_count, "
+        "h.error_message, j.name as job_name, h.trigger_source "
+        "FROM job_execution_history h JOIN discover_jobs j ON h.job_id = j.id"
+    )
+
+    def _placeholders(self, query: str) -> str:
+        """Use the %s placeholder style of MySQL/MariaDB/PostgreSQL; SQLite keeps ?."""
+        return query.replace('?', '%s') if self.db.db_type in ('mysql', 'mariadb', 'postgres') else query
+
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
-        return next((row for row in self.get_recent_history(1000) if row['id'] == execution_id), None)
+        """Return one run by id, however old it is.
+
+        Args:
+            execution_id: ID of the execution history record.
+
+        Returns:
+            History dictionary, or None when no such run exists.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(self._placeholders(f"{self._HISTORY_SELECT} WHERE h.id = ?"), (execution_id,))
+            row = cursor.fetchone()
+        return self._row_to_history_dict(row) if row else None
+
+    def list_executions(self, job_id: Optional[int] = None, status: Optional[str] = None,
+                        owner_id: Optional[int] = None, limit: int = 25, offset: int = 0):
+        """Return one page of runs, newest first, filtered and counted in SQL.
+
+        Args:
+            job_id: Only runs of this job.
+            status: Only runs with this status.
+            owner_id: Only runs of jobs owned by this account (regular users); None means all jobs.
+            limit: Page size.
+            offset: Rows to skip.
+
+        Returns:
+            Tuple ``(rows, total)``: the page of history dictionaries and the number of matching runs.
+        """
+        clauses, params = [], []
+        for condition, value in (("h.job_id = ?", job_id), ("h.status = ?", status), ("j.owner_id = ?", owner_id)):
+            if value is not None:
+                clauses.append(condition)
+                params.append(value)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(self._placeholders(
+                f"SELECT COUNT(*) FROM job_execution_history h JOIN discover_jobs j ON h.job_id = j.id{where}"),
+                tuple(params))
+            total = cursor.fetchone()[0]
+            cursor.execute(self._placeholders(
+                f"{self._HISTORY_SELECT}{where} ORDER BY h.started_at DESC, h.id DESC LIMIT ? OFFSET ?"),
+                (*params, limit, offset))
+            rows = [self._row_to_history_dict(row) for row in cursor.fetchall()]
+        return rows, total
 
     def get_execution_deliveries(self, execution_id: int) -> List[Dict[str, Any]]:
         """Return credential-free Seer queue items produced by one job run."""
@@ -508,6 +563,25 @@ class JobRepository:
 
             self.logger.debug(f"Updated execution history record ID: {exec_id}")
 
+    def finish_execution_if_open(self, exec_id: int, status: str, error_message: Optional[str] = None) -> None:
+        """Close a history row only if it is still running or queued.
+
+        Used when an executor failed before it could write its own end record, so the row never stays
+        ``running`` forever, without overwriting a row the executor already finished.
+
+        Args:
+            exec_id: ID of the execution history record.
+            status: Final status, normally 'failed'.
+            error_message: Short reason.
+        """
+        placeholder = '%s' if self.db.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        query = (f"UPDATE job_execution_history SET finished_at = {placeholder}, status = {placeholder}, "
+                 f"error_message = {placeholder} WHERE id = {placeholder} AND status IN ('running', 'queued')")
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (datetime.now().isoformat(), status, error_message, exec_id))
+            conn.commit()
+
     def get_job_history(self, job_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Retrieve execution history for a specific job.
@@ -548,28 +622,33 @@ class JobRepository:
 
             return history
 
-    def get_recent_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_history(self, limit: int = 100, owner_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Retrieve recent execution history across all jobs.
 
         Args:
             limit: Maximum number of records to return.
+            owner_id: When given, only runs of jobs owned by this account. The filter
+                runs before the LIMIT, so an owner's older runs are not crowded out
+                by newer runs of other people's jobs.
 
         Returns:
             List of execution history dictionaries.
         """
         self.logger.debug(f"Retrieving recent history, limit: {limit}")
 
-        query = """
+        owner_clause = "WHERE j.owner_id = ?" if owner_id is not None else ""
+        query = f"""
             SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status,
                    h.results_count, h.requested_count, h.error_message,
                    j.name as job_name, h.trigger_source
             FROM job_execution_history h
             JOIN discover_jobs j ON h.job_id = j.id
+            {owner_clause}
             ORDER BY h.started_at DESC
             LIMIT ?
         """
-        params = (limit,)
+        params = (limit,) if owner_id is None else (owner_id, limit)
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -754,24 +833,16 @@ class JobRepository:
                 return False
 
         query = "DELETE FROM discover_jobs WHERE id = ?"
-        params = (job_id,)
+        if self.db.db_type in ['mysql', 'postgres']:
+            query = query.replace("?", "%s")
 
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-
-            if self.db.db_type in ['mysql', 'postgres']:
-                query = query.replace("?", "%s")
-
-            cursor.execute(query, params)
-            conn.commit()
-
-            deleted = cursor.rowcount > 0
-            if deleted:
-                self.logger.info(f"Deleted discover job ID: {job_id}")
-            else:
-                self.logger.warning(f"No job found with ID: {job_id}")
-
-            return deleted
+        # Cascades to the job's history, list state and unwatched-cycle rows, on SQLite too.
+        deleted = delete_cascading(self.db, query, (job_id,)) > 0
+        if deleted:
+            self.logger.info(f"Deleted discover job ID: {job_id}")
+        else:
+            self.logger.warning(f"No job found with ID: {job_id}")
+        return deleted
 
     def _row_to_history_dict(self, row) -> Dict[str, Any]:
         """

@@ -5,12 +5,19 @@ YAML settings) into a portable snapshot and restoring it on import.  All DB
 logic lives here; the route layer only calls these two static methods.
 """
 
+import os
 from typing import Optional
 
+from api_service.config import config as config_module
 from api_service.config.config import (
+    INTEGRATION_TO_FLAT,
+    get_config_values,
     get_default_values,
+    invalidate_config_cache,
     load_env_vars,
     save_env_vars,
+    validate_cron_times,
+    validate_request_backend,
     validate_seer_expiry_settings,
 )
 from api_service.config.logger_manager import LoggerManager
@@ -438,27 +445,63 @@ class ConfigService:
                                          SEER_TOKEN=service_cfg.get('api_key'))
 
         settings = bind_flat_credentials(incoming_settings, binding_config)
+
+        # Validate the whole prospective configuration before any write.
+        current_config = load_env_vars()
+        prospective = dict(current_config)
+        for key in _VALID_SETTING_KEYS:
+            if key in settings and not is_redacted(settings[key]):
+                prospective[key] = settings[key]
         for service, service_cfg in prepared.items():
-            # Log non-sensitive fields only.
-            safe = _redact_for_log(service_cfg)
-            logger.info("Importing integration '%s' %s", service, safe)
-            db.set_integration(service, service_cfg)
-
-        # --- 2. Restore settings ----------------------------------------------
+            for field, flat_key in INTEGRATION_TO_FLAT.get(service, {}).items():
+                if field in service_cfg:
+                    prospective[flat_key] = service_cfg[field]
         if settings:
-            current_config = load_env_vars()
-            updated_keys = []
-            for key in _VALID_SETTING_KEYS:
-                if key in settings and not is_redacted(settings[key]):
-                    current_config[key] = settings[key]
-                    updated_keys.append(key)
-            logger.info("Restoring %d setting key(s) from import", len(updated_keys))
-            save_env_vars(current_config)
+            validate_cron_times(prospective)
+        validate_request_backend({**get_config_values(), **prospective}, current_config)
 
-        # --- 3. Restore media users (optional) --------------------------------
-        media_users = data.get("media_users") or []
-        if media_users:
-            _import_media_users(db, media_users)
+        # Snapshot what the writes below can change, to restore it if one fails.
+        config_snapshot = None
+        if os.path.exists(config_module.CONFIG_PATH):
+            with open(config_module.CONFIG_PATH, 'r', encoding='utf-8') as config_file:
+                config_snapshot = config_file.read()
+        previous = {service: db.get_integration(service) for service in prepared}
+
+        try:
+            for service, service_cfg in prepared.items():
+                # Log non-sensitive fields only.
+                safe = _redact_for_log(service_cfg)
+                logger.info("Importing integration '%s' %s", service, safe)
+                db.set_integration(service, service_cfg)
+
+            # --- 2. Restore settings ------------------------------------------
+            if settings:
+                current_config = load_env_vars()
+                updated_keys = []
+                for key in _VALID_SETTING_KEYS:
+                    if key in settings and not is_redacted(settings[key]):
+                        current_config[key] = settings[key]
+                        updated_keys.append(key)
+                logger.info("Restoring %d setting key(s) from import", len(updated_keys))
+                save_env_vars(current_config)
+
+            # --- 3. Restore media users (optional) ----------------------------
+            media_users = data.get("media_users") or []
+            if media_users:
+                _import_media_users(db, media_users)
+        except Exception:
+            # shortcut: media-user rows written by a failed import are not rolled back.
+            logger.error("Config import failed; restoring the previous configuration", exc_info=True)
+            for service, old_cfg in previous.items():
+                if old_cfg is None:
+                    db.delete_integration(service)
+                else:
+                    db.set_integration(service, old_cfg)
+            if config_snapshot is not None:
+                with open(config_module.CONFIG_PATH, 'w', encoding='utf-8') as config_file:
+                    config_file.write(config_snapshot)
+            invalidate_config_cache()
+            raise
 
         # --- 4. Refresh DB config in case DB connection settings changed ------
         db.refresh_config()

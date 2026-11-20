@@ -24,3 +24,11 @@ export function approvalEnabled(jobsResponse) {
   const globalDefault = jobsResponse?.request_approval_default;
   return (jobsResponse?.jobs || []).some(job => jobRequiresApproval(job, globalDefault));
 }
+
+
+/** Split decision ids into requests the workflow endpoints accept (at most 100 ids each). */
+export function chunkIds(ids, size = 100) {
+  const chunks = [];
+  for (let start = 0; start < ids.length; start += size) chunks.push(ids.slice(start, start + size));
+  return chunks;
+}

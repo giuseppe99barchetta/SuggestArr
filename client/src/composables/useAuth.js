@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ref } from "vue";
+import { writeStorage, removeStorage } from "../utils/storage.js";
 
 // Module-level singleton — shared across all composable instances
 const accessToken = ref(null);
@@ -12,40 +13,22 @@ let _refreshPromise = null;
 let _interceptorsSetup = false;
 let _router = null;
 let _refreshFailed = false; // Once true, no further refresh attempts until login
+let _refreshTransient = false; // The last refresh failed for a recoverable reason (backend down, timeout)
 
 // Auth initialization tracking — ensures app doesn't make protected API calls
 // until auth is fully set up and any required refresh is complete.
 let _authInitReadyPromise = null;
 let _authInitResolve = null;
 
-function isAbortLikeError(error) {
-  const code = error?.code || error?.message?.code;
-  if (code === "ECONNABORTED" || code === "ERR_CANCELED") return true;
-  if (error?.name === "CanceledError") return true;
-
-  const rawMessage =
-    typeof error?.message === "string"
-      ? error.message
-      : typeof error?.message?.message === "string"
-        ? error.message.message
-        : "";
-  const message = rawMessage.toLowerCase();
-  return message.includes("aborted") || message.includes("canceled");
-}
-
 /**
- * Decode a JWT and check whether it has already expired.
- * Does NOT verify the signature — used only for client-side timing decisions.
- * Returns true if the token is absent, unparseable, or past its `exp` claim.
+ * The Authorization header a request was sent with (axios keeps it on a plain object or on AxiosHeaders).
+ * @param {import('axios').AxiosRequestConfig} config - Request config of the failed call.
+ * @returns {string|null} The header value, or null when the request carried none.
  */
-function isTokenExpired(token) {
-  if (!token) return true;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return Date.now() >= payload.exp * 1000;
-  } catch {
-    return true; // Treat unreadable tokens as expired
-  }
+function sentAuthorization(config) {
+  const headers = config?.headers;
+  if (!headers) return null;
+  return headers.Authorization || (typeof headers.get === "function" ? headers.get("Authorization") : null) || null;
 }
 
 /**
@@ -131,16 +114,18 @@ export function useAuth() {
       .post("/api/auth/refresh", {}, { _skipAuth: true })
       .then((res) => {
         setSessionFromAccessToken(res.data.access_token);
-        localStorage.setItem(SESSION_HINT_KEY, "1");
+        writeStorage(SESSION_HINT_KEY, "1");
         return true;
       })
       .catch((error) => {
-        setSessionFromAccessToken(null);
-        // Keep retry capability for transient abort/cancel/timeouts.
-        // Permanently stop auto-refresh for this session on auth failures.
-        if (!isAbortLikeError(error)) {
+        // Only a real refusal ends the session. A backend restarting (5xx), a network drop or a
+        // timeout must stay recoverable: keep the session and let the next request try again.
+        const status = error?.response?.status;
+        _refreshTransient = !(status === 401 || status === 403);
+        if (!_refreshTransient) {
+          setSessionFromAccessToken(null);
           _refreshFailed = true; // Block further refresh attempts until next login
-          localStorage.removeItem(SESSION_HINT_KEY);
+          removeStorage(SESSION_HINT_KEY);
         }
         return false;
       })
@@ -159,19 +144,20 @@ export function useAuth() {
     setSessionFromAccessToken(res.data.access_token);
     authBypass.value = false;
     _refreshFailed = false; // Allow refresh attempts again after a fresh login
-    localStorage.setItem(SESSION_HINT_KEY, "1");
+    writeStorage(SESSION_HINT_KEY, "1");
     return res.data;
   }
 
   async function logout() {
     try {
       // _skipAuth: true prevents the 401 interceptor from re-entering this path
-      await axios.post("/api/auth/logout", {}, { _skipAuth: true });
+      await axios.post("/api/auth/refresh/revoke", {}, { _skipAuth: true });
     } finally {
       setSessionFromAccessToken(null);
       authBypass.value = false;
       _refreshFailed = false; // Allow refresh after the user logs in again
-      localStorage.removeItem(SESSION_HINT_KEY);
+      removeStorage(SESSION_HINT_KEY);
+      removeStorage("suggestarr_config"); // legacy cache of the full configuration
     }
   }
 
@@ -222,26 +208,33 @@ export function useAuth() {
         //  3. The failing request is not /auth/refresh itself
         //  4. The request was not explicitly marked as public (_skipAuth)
         //     — public requests (login, setup, status) should never trigger refresh
-        //  5. The current token is absent or actually expired
-        //     — a fresh token returned by login() that the server rejects cannot
-        //       be fixed by refreshing; only refresh when expiry is the likely cause
-        const tokenAbsentOrExpired =
-          !accessToken.value || isTokenExpired(accessToken.value);
-
+        // A 401 on a token that has not expired is possible too (the account was deactivated or
+        // demoted), and refreshing is how the session finds out and ends cleanly.
         if (
           error.response?.status === 401 &&
           !original?._retry &&
           !isRefreshEndpoint &&
-          !original?._skipAuth &&
-          tokenAbsentOrExpired
+          !original?._skipAuth
         ) {
           original._retry = true;
+          // Concurrent requests share one expired token: when another request already replaced it, this
+          // one only needs to be sent again with the current token, not to refresh a second time.
+          const sent = sentAuthorization(original);
+          const current = accessToken.value ? `Bearer ${accessToken.value}` : null;
+          if (sent && current && sent !== current) {
+            original.headers = original.headers || {};
+            original.headers.Authorization = current;
+            return axios(original);
+          }
           const refreshed = await tryRefresh();
           if (refreshed) {
             original.headers = original.headers || {};
             original.headers.Authorization = `Bearer ${accessToken.value}`;
             return axios(original);
           }
+          // The backend could not be reached to refresh: this is not a logout. Fail this request only;
+          // the next one tries again once the backend is back.
+          if (_refreshTransient) return Promise.reject(error);
 
           // Refresh failed — log out (clears currentUser + calls backend to
           // revoke the refresh cookie) then redirect to login

@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4" data-tour-id="jobs-section-header">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
-        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer.</p>
+        <p class="m-0 mt-1.5 max-w-2xl text-[0.9375rem] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer or Radarr/Sonarr.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
@@ -24,15 +24,29 @@
       <button v-if="['failed', 'interrupted'].includes(listImport.status)" type="button" class="ui-btn" :disabled="importStarting" @click="resumeListImport">Resume import</button>
     </section>
 
+    <!-- A manual run stopped by a pause: say why and offer to run anyway -->
+    <div v-if="pausedRun" role="status" class="flex items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3">
+      <i aria-hidden="true" class="fas fa-pause-circle text-caution"></i>
+      <div class="flex flex-1 flex-col text-sm">
+        <strong class="text-ink">{{ pausedRun.job.name }} is paused</strong>
+        <span class="text-ink-3">{{ pausedRun.message }}</span>
+      </div>
+      <button type="button" class="ui-btn" :disabled="isRunning[pausedRun.job.id]" @click="runPausedAnyway">Run anyway</button>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="pausedRun = null"><i aria-hidden="true" class="fas fa-times"></i></button>
+    </div>
+
     <!-- Seer delivery queue -->
     <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
       <i aria-hidden="true" class="fas fa-circle-notch fa-spin text-notice"></i>
       <div class="flex flex-1 flex-col text-sm">
-        <strong class="text-ink">Delivering to Seer…</strong>
+        <strong class="text-ink">Delivering requests…</strong>
         <span class="text-ink-3">
           {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
           <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
           <template v-if="queueStatus.failed > 0"> · <span class="text-bad">{{ queueStatus.failed }} failed</span></template>
+        </span>
+        <span v-if="queueStatus.unavailable_since" class="text-caution">
+          Waiting for Seer, Radarr or Sonarr: unreachable since {{ formatUtc(queueStatus.unavailable_since) }}. Deliveries resume by themselves; after 7 days of this they are marked failed and can be retried.
         </span>
       </div>
       <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
@@ -41,7 +55,7 @@
       <i aria-hidden="true" class="fas fa-check-circle text-good"></i>
       <div class="flex flex-1 flex-col text-sm">
         <strong class="text-ink">All requests delivered</strong>
-        <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
+        <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} delivered successfully</span>
       </div>
       <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
@@ -52,7 +66,7 @@
       <dl class="m-0 grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-4">
         <div v-for="type in jobTypes" :key="type.id" class="flex min-w-0 flex-col gap-2 rounded-ctl border border-edge bg-canvas/40 p-3.5">
           <dt class="flex items-center gap-2.5 text-sm font-bold" :class="type.text"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
-          <dd class="m-0 text-[13px] leading-relaxed text-ink-3">{{ type.description }}</dd>
+          <dd class="m-0 text-[0.8125rem] leading-relaxed text-ink-3">{{ type.description }}</dd>
         </div>
       </dl>
       <button type="button" class="absolute right-3 top-3 h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Hide job types" @click="dismissInfoBox"><i aria-hidden="true" class="fas fa-times"></i></button>
@@ -73,7 +87,7 @@
         <h2 id="hit-rate-title" class="m-0 text-sm font-bold text-ink">Watched after request</h2>
         <dl class="m-0 flex flex-wrap gap-x-6 gap-y-2">
           <div v-for="source in sourceHitRates" :key="source.label" class="flex items-baseline gap-2" :title="`${source.watched} of ${source.requested} requested titles watched`">
-            <dt class="text-[13px] text-ink-3">{{ source.label }}</dt>
+            <dt class="text-[0.8125rem] text-ink-3">{{ source.label }}</dt>
             <dd class="m-0 text-sm font-bold text-ink">{{ source.rate }}%</dd>
           </div>
         </dl>
@@ -90,9 +104,9 @@
           <div class="flex min-w-0 flex-col gap-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="m-0 text-base font-bold text-ink">{{ job.name }}</h2>
-              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[11px] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[9px]"></i>Paused</span>
-              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
-              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
+              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[0.6875rem] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[0.5625rem]"></i>Paused</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[0.6875rem] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[0.6875rem] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
             </div>
             <div v-if="hasFilters(job)" class="flex flex-wrap gap-1.5 text-xs text-ink-3">
               <span>Up to {{ job.max_results }} per run</span>
@@ -147,7 +161,7 @@
 
     <section v-if="recentHistory.length > 0" class="flex flex-col gap-3.5" data-tour-id="jobs-history">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">Recent runs</h2>
+        <h2 class="m-0 text-[1.1875rem] font-bold text-ink">Recent runs</h2>
         <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-brand-ink hover:text-brand" @click="showHistoryModal = true">Full history →</button>
       </div>
       <div class="overflow-x-auto rounded-card border border-edge bg-panel">
@@ -165,7 +179,7 @@
               <td class="px-[18px] py-3.5 font-semibold text-ink">{{ exec.job_name }}</td>
               <td class="px-[18px] py-3.5 text-ink-2">{{ formatDate(exec.started_at) }}</td>
               <td class="px-[18px] py-3.5 text-ink-2">{{ exec.status === 'failed' && exec.error_message ? exec.error_message : `${exec.results_count} found · ${exec.requested_count} requested` }}</td>
-              <td class="px-[18px] py-3.5"><span class="inline-flex items-center gap-1.5 text-[13px] font-semibold" :class="runStatus(exec.status).text"><span class="h-2 w-2 rounded-full" :class="runStatus(exec.status).dot"></span>{{ runStatus(exec.status).label }}</span></td>
+              <td class="px-[18px] py-3.5"><span class="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold" :class="runStatus(exec.status).text"><span class="h-2 w-2 rounded-full" :class="runStatus(exec.status).dot"></span>{{ runStatus(exec.status).label }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -179,10 +193,11 @@
       :job="editingJob"
       :request-approval-default="jobDefaults.requestApproval"
       :approval-pause-default="jobDefaults.approvalPause"
+      :request-backend="jobDefaults.requestBackend"
       @close="closeModal"
       @save="saveJob"
     />
-    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" @close="showImportModal = false" @save="importListOnce" />
+    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" :request-backend="jobDefaults.requestBackend" @close="showImportModal = false" @save="importListOnce" />
 
     <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
       <div class="flex flex-col gap-4 p-6">
@@ -233,6 +248,7 @@ import ActionMenu from '@/components/ui/ActionMenu.vue';
 import { timeFromNow } from '@/utils/dateUtils.js';
 import { hitRate, hitRatesBySource } from '@/utils/jobHitRates.js';
 import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
+import { readStorage, writeStorage, removeStorage } from '@/utils/storage.js';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
 // Index of the first step that targets elements inside the job modal
@@ -254,7 +270,7 @@ export default {
     return {
       jobs: [],
       // Global settings that jobs set to "inherit" follow, shown inside the job modal.
-      jobDefaults: { requestApproval: null, approvalPause: null },
+      jobDefaults: { requestApproval: null, approvalPause: null, requestBackend: 'seer' },
       recentHistory: [],
       allHistory: [],
       isLoading: false,
@@ -273,9 +289,10 @@ export default {
       editingJob: null,
       jobToDelete: null,
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
+      pausedRun: null,
       queuePollInterval: null,
-      queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
-      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
+      queueBannerDismissed: readStorage('sj_queue_banner_dismissed') === '1',
+      showInfoBox: readStorage('sj_info_box_hidden') !== '1',
       showJobsTour: false,
       jobTypes: [
         { id: 'discover', label: 'Discover', icon: 'fas fa-search', bg: 'bg-notice/15', text: 'text-notice', description: 'Finds titles with TMDb filters (genre, rating, year), independent of what anyone watched.' },
@@ -353,7 +370,7 @@ export default {
         {
           targetId: 'job-modal-requests',
           title: 'Requests',
-          description: 'Choose whether suggestions go straight to Seer or wait for your approval, and which Seer user they are credited to.',
+          description: 'Choose whether suggestions are sent right away or wait for your approval, and (with Seer) which Seer user they are credited to.',
           position: 'top'
         },
         {
@@ -384,7 +401,7 @@ export default {
     await this.pollQueueStatus();
     await this.pollListImport();
 
-    if (!localStorage.getItem(JOBS_TOUR_KEY)) {
+    if (!readStorage(JOBS_TOUR_KEY)) {
       setTimeout(() => this.startJobsTour(), 600);
     }
   },
@@ -442,6 +459,7 @@ export default {
           this.jobDefaults = {
             requestApproval: response.request_approval_default ?? null,
             approvalPause: typeof response.approval_pause_default === 'boolean' ? response.approval_pause_default : null,
+            requestBackend: response.request_backend || 'seer',
           };
         }
       } catch (error) {
@@ -497,7 +515,7 @@ export default {
           this.queueStatus = response;
           if (response.total_pending > 0 && !this.queuePollInterval) {
             this.queueBannerDismissed = false;
-            localStorage.removeItem('sj_queue_banner_dismissed');
+            removeStorage('sj_queue_banner_dismissed');
             this.queuePollInterval = setInterval(this.pollQueueStatus, 5000);
           } else if (response.total_pending === 0 && this.queuePollInterval) {
             clearInterval(this.queuePollInterval);
@@ -509,15 +527,24 @@ export default {
       }
     },
 
-    async runJob(job) {
+    async runPausedAnyway() {
+      const job = this.pausedRun?.job;
+      this.pausedRun = null;
+      if (job) await this.runJob(job, true);
+    },
+
+    async runJob(job, force = false) {
       this.isRunning[job.id] = true;
+      this.pausedRun = null;
       try {
         this.$toast.open({
           message: `Running job: ${job.name}...`,
           type: 'info'
         });
-        const response = await jobsApi.runJobNow(job.id);
-        if (response.status === 'success') {
+        const response = await jobsApi.runJobNow(job.id, force);
+        if (response.status === 'paused') {
+          this.pausedRun = { job, message: response.message };
+        } else if (response.status === 'success') {
           this.$toast.open({
             message: `Job completed: ${response.results_count} found, ${response.requested_count} enqueued for Seer`,
             type: 'success',
@@ -535,7 +562,7 @@ export default {
       } catch (error) {
         console.error('Failed to run job:', error);
         this.$toast.open({
-          message: error.response?.data?.message || 'Failed to run job',
+          message: error.response?.status === 409 ? 'This job is already running.' : (error.response?.data?.message || 'Failed to run job'),
           type: 'error'
         });
       } finally {
@@ -676,12 +703,12 @@ export default {
 
     dismissQueueBanner() {
       this.queueBannerDismissed = true;
-      localStorage.setItem('sj_queue_banner_dismissed', '1');
+      writeStorage('sj_queue_banner_dismissed', '1');
     },
 
     dismissInfoBox() {
       this.showInfoBox = false;
-      localStorage.setItem('sj_info_box_hidden', '1');
+      writeStorage('sj_info_box_hidden', '1');
     },
 
     startJobsTour() {
@@ -691,7 +718,7 @@ export default {
     },
 
     restartJobsTour() {
-      localStorage.removeItem(JOBS_TOUR_KEY);
+      removeStorage(JOBS_TOUR_KEY);
       this.showJobsTour = false;
       this.$nextTick(() => this.startJobsTour());
     },
@@ -718,7 +745,7 @@ export default {
 
     onJobsTourDone() {
       this.showJobsTour = false;
-      localStorage.setItem(JOBS_TOUR_KEY, '1');
+      writeStorage(JOBS_TOUR_KEY, '1');
       // Close the modal if it was opened by the tour
       if (this.editingJob || this.showCreateModal) {
         this.closeModal();
@@ -732,6 +759,11 @@ export default {
 
     formatSchedule: formatJobSchedule,
     hitRate,
+
+    formatUtc(isoText) {
+      // The server sends naive UTC timestamps without a zone marker.
+      return this.formatDate(/Z|[+-]\d\d:?\d\d$/.test(isoText) ? isoText : `${isoText}Z`);
+    },
 
     formatDate(dateStr) {
       if (!dateStr) return 'N/A';

@@ -1,6 +1,30 @@
 import json
+import re
 
 from api_service.exceptions.database_exceptions import DatabaseError
+
+# Columns that hold free text or JSON and must not be cut by the generic TEXT -> VARCHAR(512) mapping MySQL
+# needs for indexable columns. MySQL rejects a longer value in strict mode and silently truncates it
+# (INSERT IGNORE) otherwise. A test lists every column that stays VARCHAR(512), so a new long column is noticed.
+MYSQL_LONG_TEXT_COLUMNS = {
+    'ai_search_feedback': ('rationale',),
+    'ai_search_history': ('query',),
+    'cleanup_settings': ('last_run_summary',),
+    'discover_jobs': ('user_ids', 'request_profiles', 'filters', 'schedule_value'),
+    'integrations': ('config_json',),
+    'job_execution_history': ('error_message',),
+    'list_import_runs': ('config_json', 'last_error'),
+    'media_availability': ('url',),
+    'pending_requests': ('payload', 'last_error'),
+    'requests': ('rationale',),
+    'simkl_account_links': ('activities_json', 'last_error'),
+    'trakt_account_links': ('last_error',),
+    'suggestion_feedback': ('reason_text',),
+    'simkl_oauth_tokens': ('access_token', 'refresh_token'),
+    'trakt_oauth_tokens': ('access_token', 'refresh_token'),
+    'user_media_profiles': ('access_token',),
+}
+
 
 class SchemaManager:
     def __init__(self, database):
@@ -62,7 +86,7 @@ class SchemaManager:
             """,
             'requests': """
                 CREATE TABLE IF NOT EXISTS requests (
-                    tmdb_request_id TEXT NOT NULL PRIMARY KEY,
+                    tmdb_request_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     tmdb_source_id TEXT,
                     source_origin TEXT,
@@ -70,13 +94,14 @@ class SchemaManager:
                     requested_by TEXT,
                     user_id TEXT,
                     rationale TEXT,
+                    PRIMARY KEY (media_type, tmdb_request_id),
                     UNIQUE(media_type, tmdb_request_id, tmdb_source_id),
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 )
             """,
             'metadata': """
                 CREATE TABLE IF NOT EXISTS metadata (
-                    media_id TEXT PRIMARY KEY,
+                    media_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     title TEXT,
                     overview TEXT,
@@ -88,6 +113,7 @@ class SchemaManager:
                     genre_ids TEXT,
                     logo_path TEXT,
                     backdrop_path TEXT,
+                    PRIMARY KEY (media_id, media_type),
                     UNIQUE(media_id, media_type)
                 )
             """,
@@ -187,6 +213,7 @@ class SchemaManager:
                     seer_request_id INTEGER,
                     seer_created_at TIMESTAMP NULL,
                     seer_instance TEXT,
+                    unavailable_since TIMESTAMP NULL,
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
@@ -547,20 +574,12 @@ class SchemaManager:
                 corrections = [
                     ("ALTER TABLE trakt_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
                     ("ALTER TABLE trakt_account_links MODIFY token_source TEXT NOT NULL", ()),
-                    ("ALTER TABLE trakt_account_links MODIFY last_error TEXT", ()),
-                    ("ALTER TABLE trakt_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
-                    ("ALTER TABLE trakt_oauth_tokens MODIFY refresh_token TEXT NOT NULL", ()),
                     ("ALTER TABLE trakt_sources MODIFY media_user_identity_id INTEGER NOT NULL", ()),
-                    # Restore real TEXT storage on columns the blanket
-                    # TEXT -> VARCHAR(512) rewrite above would truncate.
-                    # activities_json is the critical one: it holds the whole
-                    # /sync/activities payload, and a silent truncation there
-                    # yields unparseable JSON and breaks the sync gate.
+                    # The long text columns (activities_json, tokens, errors...) are LONGTEXT from
+                    # MYSQL_LONG_TEXT_COLUMNS and widened by _widen_mysql_long_text_columns; a MODIFY to
+                    # TEXT here would narrow them again on every start.
                     ("ALTER TABLE simkl_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
                     ("ALTER TABLE simkl_account_links MODIFY token_source TEXT NOT NULL", ()),
-                    ("ALTER TABLE simkl_account_links MODIFY last_error TEXT", ()),
-                    ("ALTER TABLE simkl_account_links MODIFY activities_json TEXT", ()),
-                    ("ALTER TABLE simkl_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
                 ]
                 with self.get_connection() as conn:
                     cursor = conn.cursor()
@@ -577,18 +596,158 @@ class SchemaManager:
 
         # Add missing columns
         self.add_missing_columns()
+        self._migrate_composite_media_keys()
         from api_service.db.recap_repository import initialize_recap_schema
         initialize_recap_schema(self._database)
         self._migrate_execution_history()
         self._migrate_request_expiry()
+        self._migrate_queue_outage()
         self._migrate_media_availability()
         self._migrate_watched_media()
         self._migrate_suggestion_feedback()
         self._widen_mysql_overview_columns()
+        self._widen_mysql_long_text_columns()
+        self._create_queue_indexes()
         self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
         self._create_submission_locks_table()
+
+    # Tables whose primary key was the bare TMDb id, so a movie and a show with the same id
+    # could not both be stored. Value: (new primary key columns, MySQL sizes for those columns,
+    # table constraints the SQLite rebuild must keep besides the primary key).
+    _COMPOSITE_MEDIA_KEYS = {
+        'requests': (
+            ('media_type', 'tmdb_request_id'),
+            {'media_type': 'VARCHAR(16)', 'tmdb_request_id': 'VARCHAR(32)'},
+            ('UNIQUE(media_type, tmdb_request_id, tmdb_source_id)',
+             'FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE'),
+        ),
+        'metadata': (
+            ('media_id', 'media_type'),
+            {'media_id': 'VARCHAR(32)', 'media_type': 'VARCHAR(16)'},
+            ('UNIQUE(media_id, media_type)',),
+        ),
+    }
+
+    def _migrate_composite_media_keys(self):
+        """
+        Give ``requests`` and ``metadata`` a (media type, TMDb id) primary key.
+
+        Idempotent: a table whose primary key already has the new columns is left alone.
+        SQLite cannot alter a primary key, so the table is rebuilt in one transaction;
+        PostgreSQL and MySQL swap the key in place.
+
+        Raises:
+            DatabaseError: When the migration fails (the transaction is rolled back).
+        """
+        for table, (key, mysql_sizes, constraints) in self._COMPOSITE_MEDIA_KEYS.items():
+            try:
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    if set(self._primary_key_columns(cursor, table)) == set(key):
+                        continue
+                    self.logger.info("Migrating %s to a (%s) primary key...", table, ", ".join(key))
+                    try:
+                        if self.db_type == 'sqlite':
+                            self._rebuild_sqlite_table_with_key(cursor, table, key, constraints)
+                        elif self.db_type == 'postgres':
+                            cursor.execute(
+                                "SELECT constraint_name FROM information_schema.table_constraints "
+                                "WHERE table_name = %s AND table_schema = current_schema() "
+                                "AND constraint_type = 'PRIMARY KEY'",
+                                (table,),
+                            )
+                            for (name,) in cursor.fetchall():
+                                cursor.execute(f'ALTER TABLE {table} DROP CONSTRAINT "{name}"')
+                            cursor.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({', '.join(key)})")
+                        else:
+                            cursor.execute(self._mysql_composite_key_alter(cursor, table, key, mysql_sizes))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        raise
+            except Exception as exc:
+                raise DatabaseError(error=f"{table} primary key migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _primary_key_columns(self, cursor, table):
+        """Return the primary key columns of ``table``, in key order."""
+        if self.db_type == 'sqlite':
+            cursor.execute(f'PRAGMA table_info({table})')
+            return [row[1] for row in sorted(cursor.fetchall(), key=lambda row: row[5]) if row[5]]
+        if self.db_type == 'postgres':
+            cursor.execute(
+                "SELECT kcu.column_name FROM information_schema.table_constraints tc "
+                "JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name "
+                "AND kcu.table_schema = tc.table_schema AND kcu.table_name = tc.table_name "
+                "WHERE tc.table_name = %s AND tc.table_schema = current_schema() "
+                "AND tc.constraint_type = 'PRIMARY KEY' ORDER BY kcu.ordinal_position",
+                (table,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+        cursor.execute(f"SHOW KEYS FROM {table} WHERE Key_name = 'PRIMARY'")
+        return [row[4] for row in sorted(cursor.fetchall(), key=lambda row: row[3])]
+
+    def _rebuild_sqlite_table_with_key(self, cursor, table, key, constraints):
+        """
+        Recreate a SQLite table with a new primary key, keeping every column and row.
+
+        Columns come from the live table (``PRAGMA table_info``), so columns added by later
+        migrations survive. Only explicit indexes are recreated: the ``sqlite_autoindex_*``
+        ones have no SQL and come back from the new table's own constraints.
+        """
+        cursor.execute(f'PRAGMA table_info({table})')
+        columns = cursor.fetchall()
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+                       (table,))
+        indexes = [row[0] for row in cursor.fetchall()]
+
+        definitions = []
+        for _cid, name, kind, notnull, default, _pk in columns:
+            column = f'"{name}" {kind}'.rstrip()
+            if notnull or name in key:
+                column += ' NOT NULL'
+            if default is not None:
+                column += f' DEFAULT {default}'
+            definitions.append(column)
+        definitions.append(f"PRIMARY KEY ({', '.join(key)})")
+        definitions.extend(constraints)
+        names = ', '.join(f'"{column[1]}"' for column in columns)
+
+        cursor.execute('BEGIN')
+        cursor.execute(f"CREATE TABLE {table}__new ({', '.join(definitions)})")
+        cursor.execute(f"INSERT INTO {table}__new ({names}) SELECT {names} FROM {table}")
+        cursor.execute(f"DROP TABLE {table}")
+        cursor.execute(f"ALTER TABLE {table}__new RENAME TO {table}")
+        for index_sql in indexes:
+            cursor.execute(index_sql)
+
+    def _mysql_composite_key_alter(self, cursor, table, key, sizes):
+        """
+        Build the single ALTER TABLE that moves a MySQL table to the new primary key.
+
+        The key columns shrink to ``sizes`` so the key fits InnoDB's 3072-byte limit. Any
+        other index on those columns is dropped and re-added in the same statement, without
+        a prefix on the shrunk columns: MySQL rejects a prefix longer than its column.
+        """
+        cursor.execute(f"SHOW INDEX FROM {table}")
+        indexes = {}
+        for row in sorted(cursor.fetchall(), key=lambda row: (row[2], row[3])):
+            non_unique, name, column, sub_part = row[1], row[2], row[4], row[7]
+            if name != 'PRIMARY':
+                indexes.setdefault(name, (non_unique, []))[1].append((column, sub_part))
+        clauses = [f"MODIFY {column} {size} NOT NULL" for column, size in sizes.items()]
+        readd = []
+        for name, (non_unique, parts) in indexes.items():
+            if not any(column in sizes for column, _ in parts):
+                continue
+            clauses.append(f"DROP INDEX {name}")
+            columns = ', '.join(column if column in sizes or not sub_part else f"{column}({sub_part})"
+                                for column, sub_part in parts)
+            kind = 'KEY' if int(non_unique) else 'UNIQUE KEY'
+            readd.append(f"ADD {kind} {name} ({columns})")
+        clauses += ["DROP PRIMARY KEY", f"ADD PRIMARY KEY ({', '.join(key)})"] + readd
+        return f"ALTER TABLE {table} " + ', '.join(clauses)
 
     def _create_api_key_indexes(self):
         """Create API-key lookup indexes after the table exists."""
@@ -667,6 +826,23 @@ class SchemaManager:
                 cursor.execute('ALTER TABLE watched_media ADD COLUMN watched_at TIMESTAMP NULL')
             conn.commit()
 
+    def _migrate_queue_outage(self):
+        """Add ``pending_requests.unavailable_since``: when the delivery backend was first found unreachable."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(pending_requests)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_requests'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM pending_requests')
+                existing = {row[0] for row in cursor.fetchall()}
+            if 'unavailable_since' not in existing:
+                cursor.execute('ALTER TABLE pending_requests ADD COLUMN unavailable_since TIMESTAMP NULL')
+            conn.commit()
+
     def _migrate_request_expiry(self):
         """Older deliveries remain untracked; never infer their remote identity."""
         with self.get_connection() as conn:
@@ -717,6 +893,81 @@ class SchemaManager:
         except Exception as exc:
             raise DatabaseError(error=f"Suggestion-feedback migration failed: {exc}", db_type=self.db_type) from exc
 
+    # (index name, table, columns); MySQL indexes only a prefix of the text columns (they are VARCHAR(512)).
+    QUEUE_INDEXES = (
+        ('idx_pending_requests_due', 'pending_requests', ('status', 'next_attempt_at')),
+        ('idx_pending_requests_execution', 'pending_requests', ('execution_id',)),
+        ('idx_webhook_deliveries_due', 'webhook_deliveries', ('status', 'next_attempt_at')),
+        ('idx_job_history_job_started', 'job_execution_history', ('job_id', 'started_at')),
+    )
+    _MYSQL_PREFIXED_COLUMNS = {'status': 32}
+
+    def _create_queue_indexes(self):
+        """Create the indexes the delivery workers and the run history read through, if missing.
+
+        Without them every worker tick scans tables that only grow. Creation is idempotent on SQLite,
+        PostgreSQL and MySQL/MariaDB, and a failure is raised like any other schema step.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for name, table, columns in self.QUEUE_INDEXES:
+                    if self._index_exists(cursor, table, name):
+                        continue
+                    if self.db_type in ('mysql', 'mariadb'):
+                        parts = [f"{c}({self._MYSQL_PREFIXED_COLUMNS[c]})" if c in self._MYSQL_PREFIXED_COLUMNS else c
+                                 for c in columns]
+                    else:
+                        parts = list(columns)
+                    cursor.execute(f"CREATE INDEX {name} ON {table} ({', '.join(parts)})")
+                    self.logger.info("Created index %s", name)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Index creation failed: {exc}", db_type=self.db_type) from exc
+
+    def _index_exists(self, cursor, table, name):
+        """Return True when the index already exists (engine-specific introspection)."""
+        if self.db_type == 'sqlite':
+            cursor.execute(f"PRAGMA index_list({table})")
+            return any(row[1] == name for row in cursor.fetchall())
+        if self.db_type == 'postgres':
+            cursor.execute("SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = %s", (name,))
+            return cursor.fetchone() is not None
+        cursor.execute("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() "
+                       "AND table_name = %s AND index_name = %s", (table, name))
+        # One row per indexed column: read them all, or the next statement fails with "Unread result found".
+        return bool(cursor.fetchall())
+
+    def _widen_mysql_long_text_columns(self):
+        """Turn the MySQL columns in MYSQL_LONG_TEXT_COLUMNS created as VARCHAR(512) or TEXT into LONGTEXT.
+
+        Older installs mapped every TEXT column to VARCHAR(512), which rejects or truncates a queued request
+        payload, an integration config or an AI rationale longer than 512 characters. A column is only
+        altered when information_schema says it is still a VARCHAR or TEXT, so a started server is not locked again
+        on every boot.
+        """
+        if self.db_type not in ('mysql', 'mariadb'):
+            return
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for table, columns in MYSQL_LONG_TEXT_COLUMNS.items():
+                    for column in columns:
+                        cursor.execute(
+                            "SELECT DATA_TYPE, IS_NULLABLE FROM information_schema.columns "
+                            "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s",
+                            (table, column),
+                        )
+                        row = cursor.fetchone()
+                        # TEXT too: older installs got these columns as TEXT (64 KB) from earlier corrections.
+                        if row and str(row[0]).lower() in ('varchar', 'text'):
+                            nullability = 'NULL' if str(row[1]).upper() == 'YES' else 'NOT NULL'
+                            cursor.execute(f"ALTER TABLE {table} MODIFY {column} LONGTEXT {nullability}")
+                            self.logger.info("Widened %s.%s to LONGTEXT", table, column)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Long text column migration failed: {exc}", db_type=self.db_type) from exc
+
     def _widen_mysql_overview_columns(self):
         """Turn MySQL overview columns created as VARCHAR into TEXT.
 
@@ -748,20 +999,42 @@ class SchemaManager:
         if db_type in ['mysql', 'mariadb']:
             # Keep full VARCHAR storage but constrain indexed prefixes to stay
             # under InnoDB's key-length limit when using utf8mb4.
+            # The (type, id) primary keys need sized columns: two VARCHAR(512) would be 4096 bytes.
             if table_name == 'requests':
+                query = query.replace("tmdb_request_id TEXT NOT NULL,", "tmdb_request_id VARCHAR(32) NOT NULL,")
+                query = query.replace("media_type TEXT NOT NULL,", "media_type VARCHAR(16) NOT NULL,", 1)
                 query = query.replace(
                     "UNIQUE(media_type, tmdb_request_id, tmdb_source_id),",
-                    "UNIQUE KEY uniq_requests_identity (media_type(191), tmdb_request_id(191), tmdb_source_id(191)),"
+                    "UNIQUE KEY uniq_requests_identity (media_type, tmdb_request_id, tmdb_source_id(191)),"
                 )
             elif table_name == 'metadata':
+                query = query.replace("media_id TEXT NOT NULL,", "media_id VARCHAR(32) NOT NULL,")
+                query = query.replace("media_type TEXT NOT NULL,", "media_type VARCHAR(16) NOT NULL,", 1)
                 query = query.replace(
                     "UNIQUE(media_id, media_type)",
-                    "UNIQUE KEY uniq_metadata_media_type (media_id(191), media_type(191))"
+                    "UNIQUE KEY uniq_metadata_media_type (media_id, media_type)"
                 )
             elif table_name == 'pending_requests':
                 query = query.replace(
                     "UNIQUE(tmdb_id, media_type)",
                     "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
+                )
+            # MariaDB turns an over-long UNIQUE into a hash index on its own; MySQL refuses it
+            # (error 1071), so these keys are prefixed too.
+            elif table_name == 'media_user_identities':
+                query = query.replace(
+                    "UNIQUE (provider, external_user_id)",
+                    "UNIQUE KEY uniq_media_user_identity (provider(64), external_user_id(191))"
+                )
+            elif table_name == 'trakt_sources':
+                query = query.replace(
+                    "UNIQUE (media_user_identity_id, source_type, source_key)",
+                    "UNIQUE KEY uniq_trakt_sources (media_user_identity_id, source_type(64), source_key(191))"
+                )
+            elif table_name == 'watched_media':
+                query = query.replace(
+                    "UNIQUE (media_user_identity_id, tmdb_id, media_type)",
+                    "UNIQUE KEY uniq_watched_media (media_user_identity_id, tmdb_id(64), media_type(16))"
                 )
             elif table_name == 'suggestion_blacklist':
                 query = """
@@ -944,6 +1217,9 @@ class SchemaManager:
                 query = query.replace('seer_created_at TIMESTAMP NULL', 'seer_created_at TIMESTAMP(6) NULL')
                 query = query.replace('seer_instance VARCHAR(512)', 'seer_instance TEXT')
 
+            for column in MYSQL_LONG_TEXT_COLUMNS.get(table_name, ()):
+                query = re.sub(rf"(\b{column}\s+)VARCHAR\(512\)", r"\1LONGTEXT", query)
+
             # Overviews are free text; TMDb ones regularly exceed 512 characters.
             if table_name in ('metadata', 'metadata_translations'):
                 query = query.replace("overview VARCHAR(512)", "overview TEXT")
@@ -1122,14 +1398,15 @@ class SchemaManager:
                     )
                 conn.commit()
         except Exception as exc:
-            self.logger.warning("Could not migrate Simkl AUTH V2 columns: %s", exc)
+            self.logger.error("Could not migrate Simkl AUTH V2 columns: %s", exc)
+            raise DatabaseError(error=f"Simkl column migration failed: {exc}", db_type=self.db_type) from exc
 
     def _migrate_viewer_role_to_user(self):
         """Migrate any existing auth_users with role='viewer' to role='user'."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                ph = self._ph()
+                ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
                 cursor.execute(
                     f"UPDATE auth_users SET role = {ph} WHERE role = {ph}",
                     ('user', 'viewer'),
@@ -1141,7 +1418,8 @@ class SchemaManager:
                         "Migrated %d auth_user(s) from role 'viewer' to 'user'.", affected
                     )
         except Exception as e:
-            self.logger.warning("Could not migrate viewer roles (table may not exist yet): %s", e)
+            self.logger.error("Could not migrate viewer roles: %s", e)
+            raise DatabaseError(error=f"Viewer role migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_auth_users_table(self):
         """Add missing columns to auth_users table for RBAC permissions."""
@@ -1219,13 +1497,16 @@ class SchemaManager:
                     conn.commit()
                 # Prompts claimed before delivery generations existed belong to generation 0.
                 cursor.execute("SELECT * FROM rating_prompts WHERE 1=0")
-                if 'generation' not in [col[0] for col in cursor.description]:
+                prompt_columns = [col[0] for col in cursor.description]
+                # MySQL requires even an empty result set to be consumed before reuse or close.
+                cursor.fetchall()
+                if 'generation' not in prompt_columns:
                     cursor.execute("ALTER TABLE rating_prompts ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
                     conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"auth_users migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_user_media_profiles_table(self):
         """
@@ -1255,7 +1536,7 @@ class SchemaManager:
                     conn.commit()
             except Exception as e:
                 self.logger.error(f"Failed to migrate user_media_profiles table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"user_media_profiles migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_discover_jobs_table(self):
         """Add missing columns to discover_jobs table for job type support."""
@@ -1412,7 +1693,7 @@ class SchemaManager:
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"discover_jobs migration failed: {e}", db_type=self.db_type) from e
 
     # ------------------------------------------------------------------
     # Integrations helpers

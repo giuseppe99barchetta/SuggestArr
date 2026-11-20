@@ -44,7 +44,8 @@ def readiness():
       - 200 if all critical checks pass
       - 503 if any critical service is unreachable
 
-    Optional services (Seer, LLM) are always reported but never cause a 503.
+    Optional services (Seer, LLM, and Radarr/Sonarr when configured under "arr") are always
+    reported but never cause a 503: a restart cannot fix an unreachable media manager.
 
     Returns:
         JSON with keys: status, db, tmdb, seer, llm.
@@ -55,16 +56,20 @@ def readiness():
     db_status = _check_db()
     tmdb_status, seer_status = _run_async_checks(config)
     llm_status = _check_llm()
+    arr_status = _run_arr_checks(config)
 
     overall = _OK if db_status == _OK and tmdb_status == _OK else _ERROR
 
-    return jsonify({
+    body = {
         "status": overall,
         "db": db_status,
         "tmdb": tmdb_status,
         "seer": seer_status,
         "llm": llm_status,
-    }), 200 if overall == _OK else 503
+    }
+    if arr_status:
+        body["arr"] = arr_status
+    return jsonify(body), 200 if overall == _OK else 503
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +111,38 @@ def _check_llm() -> str:
     except Exception as e:
         logger.error("Health LLM check failed: %s", e)
         return _ERROR
+
+
+def _run_arr_checks(config: dict) -> dict:
+    """Check every configured Radarr/Sonarr instance; returns ``{service: "ok"|"error"}`` (empty if none)."""
+    from api_service.config.config import ARR_INSTANCES
+    from api_service.services.arr.arr_client import ArrClient
+
+    targets = {service: (config.get(url_key), config.get(token_key))
+               for service, (url_key, token_key, _) in ARR_INSTANCES.items()
+               if config.get(url_key) and config.get(token_key)}
+    if not targets:
+        return {}
+
+    async def check(service, url, key):
+        try:
+            async with ArrClient(service, url, key) as client:
+                await client.test_connection()
+            return _OK
+        except Exception as e:
+            logger.error("Health %s check failed: %s", service.capitalize(), e)
+            return _ERROR
+
+    async def gather():
+        results = await asyncio.gather(*(check(service, *creds) for service, creds in targets.items()))
+        return dict(zip(targets, results))
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(gather())
+    finally:
+        close_event_loop(loop, logger)
 
 
 def _run_async_checks(config: dict) -> tuple:

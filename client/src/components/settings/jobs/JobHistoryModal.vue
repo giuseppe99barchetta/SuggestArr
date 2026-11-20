@@ -15,7 +15,7 @@
           type="button"
           role="radio"
           :aria-checked="filterStatus === option.value ? 'true' : 'false'"
-          class="h-8 shrink-0 cursor-pointer whitespace-nowrap rounded-[7px] border-0 px-3 text-[13px] font-semibold max-sm:px-2"
+          class="h-8 shrink-0 cursor-pointer whitespace-nowrap rounded-[7px] border-0 px-3 text-[0.8125rem] font-semibold max-sm:px-2"
           :class="filterStatus === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
           @click="filterStatus = option.value"
         >{{ option.label }} <span class="text-ink-4">{{ countFor(option.value) }}</span></button>
@@ -41,7 +41,7 @@
             <span class="block truncate font-semibold text-ink">{{ exec.job_name }}</span>
             <span class="block text-xs text-ink-3">{{ formatDate(exec.started_at) }} · {{ formatDuration(exec) }}</span>
           </span>
-          <span class="flex items-center gap-3 text-right text-[13px]">
+          <span class="flex items-center gap-3 text-right text-[0.8125rem]">
             <span v-if="exec.status === 'failed'" class="font-semibold text-bad">Failed</span>
             <span v-else-if="exec.status === 'running'" class="font-semibold text-notice"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Running</span>
             <span v-else class="text-ink-2"><strong class="text-ink">{{ exec.requested_count }}</strong> requested <span class="text-ink-4 max-sm:hidden">/ {{ exec.results_count }} found</span></span>
@@ -66,7 +66,7 @@
     </div>
 
     <template v-if="totalPages > 1" #footer>
-      <span class="mr-auto text-[13px] text-ink-3">Page {{ currentPage }} of {{ totalPages }}</span>
+      <span class="mr-auto text-[0.8125rem] text-ink-3">Page {{ currentPage }} of {{ totalPages }}</span>
       <button type="button" class="ui-btn w-10 px-0" aria-label="Previous page" :disabled="currentPage === 1" @click="currentPage--"><i aria-hidden="true" class="fas fa-chevron-left"></i></button>
       <button type="button" class="ui-btn w-10 px-0" aria-label="Next page" :disabled="currentPage === totalPages" @click="currentPage++"><i aria-hidden="true" class="fas fa-chevron-right"></i></button>
     </template>

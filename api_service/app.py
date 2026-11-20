@@ -1,7 +1,6 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
-from concurrent.futures import ThreadPoolExecutor
 import os
 from flask import Flask, jsonify, render_template, send_from_directory, url_for
 from flask_cors import CORS
@@ -29,10 +28,10 @@ from api_service.blueprints.config.routes import config_bp
 from api_service.blueprints.tmdb.routes import tmdb_bp
 from api_service.blueprints.omdb.routes import omdb_bp
 from api_service.blueprints.mdblist.routes import mdblist_bp
+from api_service.blueprints.arr.routes import arr_bp
 from api_service.blueprints.jobs.routes import jobs_bp
 from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
-from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
 from api_service.blueprints.cleanup.routes import cleanup_bp
 from api_service.blueprints.trakt.routes import trakt_bp
@@ -41,32 +40,8 @@ from api_service.blueprints.simkl.routes import simkl_bp
 from api_service.blueprints.discord_interactions import discord_interactions_bp
 from api_service.api.v1 import public_api_v1_bp
 
-class SubpathMiddleware:
-    """
-    WSGI Middleware to strip the SUBPATH from the request URL
-    so Flask routing works correctly behind various reverse proxies.
-    """
-    def __init__(self, app):
-        self.app = app
-
-    def __call__(self, environ, start_response):
-        env_vars = load_env_vars()
-        subpath = env_vars.get('SUBPATH')
-        subpath = str(subpath).strip('/') if subpath else ''
-        
-        if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
-            # Strip the subpath from PATH_INFO.
-            # If the URL is exactly /<subpath> (no trailing slash), the result
-            # would be an empty string which is not a valid WSGI PATH_INFO.
-            # Fall back to '/' so Flask can match the root route.
-            stripped = environ['PATH_INFO'][len(subpath) + 1:]
-            environ['PATH_INFO'] = stripped if stripped else '/'
-            # Ensure SCRIPT_NAME correctly reflects the subpath
-            environ['SCRIPT_NAME'] = f'/{subpath}'
-        return self.app(environ, start_response)
 from api_service.frontend_routes import SubpathMiddleware, register_routes
 
-executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
 logger.debug(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
 
@@ -81,8 +56,7 @@ def create_app():
     Create and configure the Flask application.
     """
 
-    if AppUtils.is_last_worker():
-        AppUtils.print_welcome_message() # Print only for last worker
+    AppUtils.print_welcome_message()
 
     static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
     if not os.path.isdir(static_dir):
@@ -192,10 +166,10 @@ def create_app():
     application.register_blueprint(tmdb_bp, url_prefix='/api/tmdb')
     application.register_blueprint(omdb_bp, url_prefix='/api/omdb')
     application.register_blueprint(mdblist_bp, url_prefix='/api/mdblist')
+    application.register_blueprint(arr_bp, url_prefix='/api/arr')
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
     application.register_blueprint(ai_search_bp, url_prefix='/api/ai-search')
     application.register_blueprint(health_bp, url_prefix='/api/health')
-    application.register_blueprint(admin_bp, url_prefix='/api/admin')
     application.register_blueprint(users_bp, url_prefix='/api/users')
     application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
     application.register_blueprint(trakt_bp, url_prefix='/api/trakt')
@@ -381,6 +355,11 @@ def _start_background_services():
             max_instances=1,
             replace_existing=True,
         )
+        from api_service.jobs.retention import run_retention
+        job_manager.scheduler.add_job(
+            run_retention, 'cron', hour=5, minute=0, id='retention',
+            max_instances=1, replace_existing=True,
+        )
         job_manager.scheduler.add_job(
             run_request_expiry, 'cron', hour=4, minute=30, id='seer_request_expiry',
             max_instances=1, replace_existing=True,
@@ -403,6 +382,8 @@ def _start_background_services():
         logger.error(traceback.format_exc())
 
 
+# shortcut: one process only. The scheduler, the queue workers and the in-memory rate limiter start at
+# import time, so `uvicorn --workers N` would run every job N times; move them behind a lock before scaling.
 # Tests import this module for its Flask app; starting the scheduler there would let its
 # jobs run against whichever test database is active (and the real one at import time).
 if os.environ.get('SUGGESTARR_DISABLE_BACKGROUND') == '1':

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
-from api_service.jobs.discover_automation import ExecutionResult
+from api_service.jobs.discover_automation import DISCOVER_SCAN_BUDGET, ExecutionResult
 from api_service.jobs.recommendation_automation import (
     _resolve_honor_seer_discovery,
     _resolve_year_range_filters,
@@ -18,6 +18,7 @@ from api_service.services.filter_normalization import normalize_filters
 from api_service.services.library_content import load_library_content
 from api_service.services.request_sources import TRAKT_RECOMMENDATIONS_SOURCE
 from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.clients import build_request_client
 from api_service.services.trakt.media_user_augmentor import TraktAccountResolver
 from api_service.services.trakt.trakt_client import TraktClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
@@ -97,20 +98,8 @@ class TraktRecommendationsAutomation:
         if exclude_requested is None:
             exclude_requested = self.env_vars.get("EXCLUDE_REQUESTED", True)
 
-        anime_profile_config = self.env_vars.get("SEER_ANIME_PROFILE_CONFIG", {})
-        if not isinstance(anime_profile_config, dict):
-            anime_profile_config = {}
-
-        self.seer_client = SeerClient(
-            self.env_vars["SEER_API_URL"],
-            self.env_vars["SEER_TOKEN"],
-            self.env_vars["SEER_USER_NAME"],
-            self.env_vars["SEER_USER_PSW"],
-            self.env_vars["SEER_SESSION_TOKEN"],
-            number_of_seasons,
-            exclude_downloaded,
-            exclude_requested,
-            anime_profile_config,
+        self.seer_client = build_request_client(
+            self.env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
             request_first_season_only,
             queue_context={**self.job_data, 'job_id': self.job_id},
         )
@@ -120,7 +109,7 @@ class TraktRecommendationsAutomation:
             await self.seer_client.init()
         self.local_content = await self._load_existing_content()
         if _resolve_honor_seer_discovery(job_filters, self.env_vars):
-            self.seer_discovered_ids = self._get_seer_discovered_tmdb_ids()
+            self.seer_discovered_ids = self.db_manager.get_seer_discovered_keys()
 
         self.trakt_client = self._build_trakt_client()
 
@@ -229,18 +218,6 @@ class TraktRecommendationsAutomation:
             filter_keywords_exclude=job_filters.get("without_keywords"),
         )
 
-    def _get_seer_discovered_tmdb_ids(self) -> set[str]:
-        """Return TMDb IDs discovered/requested directly in Seer."""
-        query = "SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'Seer'"
-        try:
-            with self.db_manager.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query)
-                return {str(row[0]) for row in cursor.fetchall()}
-        except Exception as exc:
-            self.logger.warning("Could not load Seer discovery IDs: %s", exc)
-            return set()
-
     async def _load_existing_content(self) -> Dict[str, set[str]]:
         """Load TMDB IDs already in the library (media server plus Seer availability)."""
         return await load_library_content(self.env_vars, self.seer_client)
@@ -308,6 +285,8 @@ class TraktRecommendationsAutomation:
             self.job_data["name"],
         )
         exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        # A sliced run's shared history row is closed once by JobManager after the last slice.
+        record_end = not dry_run and not self.job_data.get('_defer_history')
         if not dry_run and self.seer_client:
             self.seer_client.queue_context['execution_id'] = exec_id
             self.logger.info("Trakt recommendations job run id=%s started.", exec_id)
@@ -331,7 +310,7 @@ class TraktRecommendationsAutomation:
 
             requested_count, dry_run_items = await self.filter_and_request(results, dry_run=dry_run)
 
-            if not dry_run:
+            if record_end:
                 self.repository.log_execution_end(
                     exec_id=exec_id,
                     status="completed",
@@ -350,7 +329,7 @@ class TraktRecommendationsAutomation:
             self.logger.error("Job failed: %s", error_msg)
             self.logger.error("Traceback: %s", traceback.format_exc())
 
-            if not dry_run and exec_id is not None:
+            if record_end and exec_id is not None:
                 self.repository.log_execution_end(
                     exec_id=exec_id,
                     status="failed",
@@ -367,40 +346,48 @@ class TraktRecommendationsAutomation:
             )
 
     async def fetch_trakt_recommendations(self) -> List[Dict[str, Any]]:
-        """Fetch and filter Trakt recommendations for the configured media types."""
+        """
+        Fetch Trakt recommendations and keep those that pass the quality filters.
+
+        The request cap (max_results) is applied in filter_and_request, so titles that are
+        already requested or owned do not use it up. At most DISCOVER_SCAN_BUDGET candidates
+        are inspected (one TMDb details lookup each), shared across media types: for "both"
+        the two lists are interleaved, so budget one type does not use goes to the other.
+
+        Returns:
+            Quality-passing candidates, in Trakt's order.
+        """
         job_filters = self.job_data.get("filters", {})
         media_type = self.job_data.get("media_type", "movie")
-        max_results = int(self.job_data.get("max_results") or 20)
-        if self.job_data.get('_replacement_for') is not None:
-            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
-            max_results = 100
-        fetch_limit = max(max_results * 3, max_results)
+        # shortcut: inspect at most DISCOVER_SCAN_BUDGET candidates per run; once those are all
+        # requested or owned the job finds nothing new. With two non-empty lists they split the
+        # budget evenly; it does not adapt to failure rates.
+        budget = DISCOVER_SCAN_BUDGET
 
         ignore_collected = bool(job_filters.get("ignore_collected", True))
         ignore_watched = bool(job_filters.get("ignore_watched", True))
 
         media_types = ["movie", "tv"] if media_type == "both" else [media_type]
-        per_type_limit = fetch_limit if len(media_types) == 1 else max(fetch_limit // 2, max_results)
-
-        raw_items: List[Dict[str, Any]] = []
+        per_type: List[List[Dict[str, Any]]] = []
         for item_type in media_types:
             trakt_items = await self.trakt_client.get_recommendations(
                 item_type,
-                limit=per_type_limit,
+                limit=budget,
                 ignore_collected=ignore_collected,
                 ignore_watched=ignore_watched,
             )
-            for item in trakt_items:
-                raw_items.append({**item, "media_type": item_type})
+            per_type.append([{**item, "media_type": item_type} for item in trakt_items])
+
+        # Interleave movie, tv, movie, ...; the longer list continues once the shorter one ends.
+        raw_items = [items[i] for i in range(max(map(len, per_type), default=0))
+                     for items in per_type if i < len(items)]
 
         filtered: List[Dict[str, Any]] = []
-        for item in raw_items:
+        for item in raw_items[:budget]:
             enriched = await self._enrich_and_filter_item(item)
             if enriched:
                 filtered.append(enriched)
-            if len(filtered) >= max_results:
-                break
-        return filtered[:max_results]
+        return filtered
 
     async def _enrich_and_filter_item(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Fetch TMDb metadata and apply configured quality filters."""
@@ -503,9 +490,10 @@ class TraktRecommendationsAutomation:
         """Filter discovered content and request via Seer."""
         requested_count = 0
         dry_run_items: Optional[List[Dict[str, Any]]] = [] if dry_run else None
+        cap = 1 if self.job_data.get('_replacement_for') is not None else int(self.job_data.get("max_results") or 20)
 
         for item in results:
-            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+            if requested_count >= cap:
                 break
             media_type = item.get("media_type") or self.job_data.get("media_type", "movie")
             tmdb_id = item["id"]
@@ -515,7 +503,7 @@ class TraktRecommendationsAutomation:
                 if self.db_manager.check_request_exists(media_type, str(tmdb_id)):
                     continue
 
-                if str(tmdb_id) in self.seer_discovered_ids:
+                if f"{media_type}:{tmdb_id}" in self.seer_discovered_ids:
                     continue
 
                 if await self.seer_client.check_already_downloaded(

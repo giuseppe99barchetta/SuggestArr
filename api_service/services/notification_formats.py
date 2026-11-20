@@ -19,6 +19,8 @@ _TITLE_EVENTS = {
     'request.failed': 'Request failed: {title}',
     'request.available': 'Now available: {title}',
 }
+# Keeps chat text well under Discord's 2000-character message cap.
+_RATIONALE_MAX = 500
 _JOB_EVENTS = {
     'job.completed': 'Job finished: {job}',
     'job.skipped': 'Job skipped: {job}',
@@ -60,7 +62,11 @@ def describe_event(event, data, title=None, job_name=None):
     """
     if event in _TITLE_EVENTS:
         label = title or f"{data.get('media_type', 'title')} {data.get('tmdb_id', '')}".strip()
-        return _TITLE_EVENTS[event].format(title=label)
+        text = _TITLE_EVENTS[event].format(title=label)
+        rationale = ' '.join(str(data.get('rationale') or '').split())
+        if len(rationale) > _RATIONALE_MAX:
+            rationale = rationale[:_RATIONALE_MAX - 1].rstrip() + '…'
+        return f'{text}\n"{rationale}"' if rationale else text
     if event in _JOB_EVENTS:
         text = _JOB_EVENTS[event].format(job=job_name or f"#{data.get('job_id')}")
         return f"{text} ({data['reason']})" if data.get('reason') else text
@@ -80,7 +86,8 @@ def render_notification(fmt, url, text):
         Tuple (url, body) where body is the JSON string to POST.
     """
     if fmt == 'discord':
-        return url, json.dumps({'content': text, 'username': 'SuggestArr'})
+        # LLM text or a title must never ping @everyone or a user.
+        return url, json.dumps({'content': text, 'username': 'SuggestArr', 'allowed_mentions': {'parse': []}})
     if fmt == 'ntfy':
         # JSON publishing goes to the server root with the topic in the body.
         parts = urlsplit(url)

@@ -2,7 +2,7 @@
 import threading
 from datetime import datetime, timedelta, timezone
 
-from api_service.config.config import validate_seer_expiry_settings
+from api_service.config.config import get_request_backend, validate_seer_expiry_settings
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
@@ -37,6 +37,8 @@ async def execute_request_expiry(*, dry_run=None):
     try:
         env = ConfigService.get_runtime_config()
         validate_seer_expiry_settings(env)
+        if get_request_backend(env) == 'arr':
+            return dict(status='disabled_backend', dry_run=True, candidates=0, simulated=0, declined=0, skipped=0, errors=0)
         days = env.get('SEER_AUTO_DECLINE_DAYS', 0)
         dry_run = env.get('SEER_AUTO_DECLINE_DRY_RUN', True) if dry_run is None else dry_run
         result = dict(status='ok', dry_run=dry_run, candidates=0, simulated=0, declined=0, skipped=0, errors=0)

@@ -7,6 +7,3 @@ const githubClient = axios.create({
 });
 
 export const getLatestRelease = () => githubClient.get("/releases/latest");
-
-export const getReleaseByTag = (tag) =>
-  githubClient.get(`/releases/tags/${encodeURIComponent(tag)}`);

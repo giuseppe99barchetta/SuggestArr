@@ -9,6 +9,8 @@ async function mockApi(page, { subpath = "", setupCompleted = true, radarrServer
   let approveBody = null;
   let runCalls = 0;
 
+  // These flows are not about release notes: the "What's new" popup would cover the dashboard.
+  await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASES_URL = ""; export const WHATS_NEW = {id:"none",title:"none",slides:[]};' }));
   await page.addInitScript(() => {
     localStorage.setItem("suggestarr_tour_done", "1");
     localStorage.setItem("suggestarr_jobs_tour_done", "1");
@@ -35,6 +37,7 @@ async function mockApi(page, { subpath = "", setupCompleted = true, radarrServer
     if (apiPath === "/api/auth/login") return json({ access_token: token });
     if (apiPath === "/api/auth/refresh") return json({ access_token: token });
     if (apiPath === "/api/auth/me") return json({ id: 1, username: "admin", role: "admin" });
+    if (apiPath === "/api/users/me/links") return json([]);
     if (apiPath === "/api/config/fetch") return json({ AUTH_MODE: "enabled" });
     if (apiPath === "/api/config/status") return json({ setup_completed: setupCompleted, is_complete: setupCompleted });
     if (apiPath === "/api/jobs") {

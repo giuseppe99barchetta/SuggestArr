@@ -6,6 +6,19 @@ from typing import Any, Dict, List, Optional, Set
 from api_service.exceptions.database_exceptions import DatabaseError
 from api_service.db.recap_repository import record_requested_title
 
+
+# requests stores no media type for its source, and a movie and a show can share a TMDb id.
+# Join exactly one metadata row for the source: the one with the request's media type when it
+# exists (TMDb recommendations keep the type), otherwise the other one.
+# (SQLite cannot use the outer row in a subquery's ORDER BY, hence CASE/EXISTS.)
+SOURCE_METADATA_JOIN = (
+    "LEFT JOIN metadata s ON s.media_id = r.tmdb_source_id AND s.media_type = (SELECT CASE "
+    "WHEN EXISTS (SELECT 1 FROM metadata s2 WHERE s2.media_id = r.tmdb_source_id AND s2.media_type = r.media_type) "
+    "THEN r.media_type "
+    "ELSE (SELECT MIN(s3.media_type) FROM metadata s3 WHERE s3.media_id = r.tmdb_source_id) END)"
+)
+
+
 class RequestMixin:
     def has_visible_suggestarr_request(self, tmdb_id: str, media_type: str,
                                        media_user_id=None, user_ids=None) -> bool:
@@ -170,7 +183,7 @@ class RequestMixin:
                 COUNT(r.tmdb_request_id) as total_requests
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
-            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
+            {SOURCE_METADATA_JOIN}
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
@@ -251,7 +264,7 @@ class RequestMixin:
                 {feedback_columns}, rt.watched_at, ma.status, ma.url
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
-            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
+            {SOURCE_METADATA_JOIN}
             LEFT JOIN users u ON r.user_id = u.user_id
             {feedback_join}
             LEFT JOIN recap_titles rt ON rt.media_type = r.media_type AND rt.tmdb_id = r.tmdb_request_id
@@ -410,22 +423,26 @@ class RequestMixin:
                     )
             conn.commit()
 
-    def get_requested_tmdb_ids(self) -> set:
-        """Return the set of TMDB IDs (as strings) that SuggestArr has already requested.
+    def get_seer_discovered_keys(self) -> set:
+        """Return ``"<media_type>:<tmdb_id>"`` keys of titles requested directly in Seer.
 
-        Used by AI Search to exclude items that have already been sent to Seer,
-        whether through the normal automation or through the AI Search feature.
+        Typed keys, because a movie and a show can share a TMDb id: a Seer request for
+        movie 1399 must not hide show 1399.
 
-        :return: Set of tmdb_request_id strings.
+        :return: Set of keys such as ``"movie:27205"``; empty when the lookup fails.
         """
-        query = "SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'SuggestArr'"
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query)
-            return {str(row[0]) for row in cursor.fetchall()}
+        query = "SELECT DISTINCT media_type, tmdb_request_id FROM requests WHERE requested_by = 'Seer'"
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                return {f"{row[0]}:{row[1]}" for row in cursor.fetchall()}
+        except Exception as exc:
+            self.logger.warning("Could not load Seer discovery IDs: %s", exc)
+            return set()
 
     def get_requested_tmdb_ids_by_type(self, media_type: str) -> set:
-        """Like :meth:`get_requested_tmdb_ids`, but only for one media type.
+        """Return TMDb ids of one media type that SuggestArr already sent to Seer.
 
         Used to name requested titles in an AI prompt, where a movie and a show that
         happen to share a numeric id must never be mixed up.

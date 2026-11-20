@@ -11,7 +11,7 @@
     <!-- The whole card opens the details; the play button sits above it. -->
     <button type="button" class="absolute inset-0 z-0 cursor-pointer border-0 bg-transparent p-0" :aria-label="`Show details for ${title}`" @click="$emit('open')"></button>
 
-    <span v-if="badge" class="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-black/55 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur-sm">{{ badge }}</span>
+    <span v-if="badge" class="pointer-events-none absolute left-2.5 top-2.5 rounded-md bg-black/55 px-2 py-0.5 text-[0.6875rem] font-bold text-white backdrop-blur-sm">{{ badge }}</span>
 
     <div class="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 p-3.5">
       <div class="flex min-w-0 flex-1 flex-col gap-1">

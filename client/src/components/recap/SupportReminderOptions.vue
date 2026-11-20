@@ -9,7 +9,7 @@
     >
       <i aria-hidden="true" class="fas fa-sliders-h text-ink-4"></i>
       Reminder options
-      <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform motion-reduce:transition-none" :class="open ? 'rotate-180' : ''"></i>
+      <i aria-hidden="true" class="fas fa-chevron-down text-[0.625rem] transition-transform motion-reduce:transition-none" :class="open ? 'rotate-180' : ''"></i>
     </button>
     <!-- 0fr -> 1fr animates height without measuring; visibility keeps the closed panel out of tab order and the a11y tree. -->
     <div
@@ -23,7 +23,7 @@
             v-for="action in actions"
             :key="action.id"
             type="button"
-            class="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-ctl border-0 bg-transparent px-3 py-2.5 text-left text-[13px] text-ink-2 transition-colors hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-ctl border-0 bg-transparent px-3 py-2.5 text-left text-[0.8125rem] text-ink-2 transition-colors hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="saving"
             @click="$emit('select', action.id)"
           >

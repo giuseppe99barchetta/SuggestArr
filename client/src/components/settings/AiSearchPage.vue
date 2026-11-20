@@ -5,7 +5,7 @@
     <div v-if="!llmAvailable" role="alert" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>
       <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one in the AI provider settings to use AI Search.</p>
-      <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
+      <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[0.8125rem] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
     </div>
 
     <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-90': !llmAvailable }" @submit.prevent="runSearch">
@@ -23,7 +23,7 @@
             :aria-expanded="showPeoplePicker ? (mentionOptions.length ? 'true' : 'false') : null"
             :aria-controls="showPeoplePicker ? 'aiMentionList' : null"
             :aria-activedescendant="mentionOptions.length ? 'aiMention' + mentionOptions[mentionIndex].id : null"
-            class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
+            class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[0.9375rem] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
             @keydown="onQueryKeydown"
             @keyup="onQueryKeyup"
             @input="updateMention"
@@ -56,7 +56,7 @@
             role="radio"
             :aria-checked="mediaType === option.value ? 'true' : 'false'"
             :disabled="isSearching"
-            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[0.8125rem] font-semibold"
             :class="mediaType === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
             @click="mediaType = option.value"
           >
@@ -65,18 +65,18 @@
         </div>
         <template v-if="showPeoplePicker">
         <div role="group" aria-labelledby="aiPeopleLabel" class="flex flex-wrap items-center gap-1 rounded-ctl border border-edge-strong bg-canvas p-1">
-          <span id="aiPeopleLabel" class="inline-flex h-9 items-center gap-2 px-2.5 text-[13px] font-semibold text-ink-4"><i aria-hidden="true" class="fas fa-user-friends"></i>For</span>
+          <span id="aiPeopleLabel" class="inline-flex h-9 items-center gap-2 px-2.5 text-[0.8125rem] font-semibold text-ink-4"><i aria-hidden="true" class="fas fa-user-friends"></i>For</span>
           <button
             v-for="person in people"
             :key="person.id"
             type="button"
             :aria-pressed="isPersonSelected(person.id) ? 'true' : 'false'"
             :disabled="isSearching || (!isPersonSelected(person.id) && selectedPeople.length >= maxPeople)"
-            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[0.8125rem] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             :class="isPersonSelected(person.id) ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
             @click="togglePerson(person.id)"
           >
-            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check text-brand-ink' : 'fas fa-plus'" class="text-[11px]"></i>{{ person.self ? 'You' : person.name }}
+            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check text-brand-ink' : 'fas fa-plus'" class="text-[0.6875rem]"></i>{{ person.self ? 'You' : person.name }}
           </button>
         </div>
         <p role="status" aria-live="polite" class="m-0 text-xs text-ink-4">{{ peopleHint }}</p>
@@ -135,7 +135,7 @@
           </label>
         </div>
         <div class="mt-3 flex flex-wrap items-center gap-3">
-          <button type="button" class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border border-edge-strong bg-transparent px-3 text-[13px] font-semibold text-ink-2 hover:text-bad disabled:opacity-50" :disabled="isResettingSeen" @click="resetSeen">
+          <button type="button" class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border border-edge-strong bg-transparent px-3 text-[0.8125rem] font-semibold text-ink-2 hover:text-bad disabled:opacity-50" :disabled="isResettingSeen" @click="resetSeen">
             <i aria-hidden="true" :class="isResettingSeen ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>{{ isResettingSeen ? 'Clearing…' : 'Clear recommendation history' }}
           </button>
           <span class="text-xs text-ink-4">Lets titles from earlier AI searches show up again.</span>
@@ -143,7 +143,7 @@
       </details>
     </form>
 
-    <div v-if="queryInterpretation && hasInterpretation" class="flex flex-wrap items-center gap-2 text-[13px]">
+    <div v-if="queryInterpretation && hasInterpretation" class="flex flex-wrap items-center gap-2 text-[0.8125rem]">
       <span class="font-semibold text-ink-3"><i aria-hidden="true" class="fas fa-brain mr-1.5 text-brand-ink"></i>Understood as</span>
       <span v-if="interpGenres" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpGenres }}</span>
       <span v-if="interpYears" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpYears }}</span>
@@ -157,7 +157,7 @@
 
     <section v-else-if="results.length > 0" class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">{{ results.length }} {{ results.length === 1 ? 'match' : 'matches' }}</h2>
+        <h2 class="m-0 text-[1.1875rem] font-bold text-ink">{{ results.length }} {{ results.length === 1 ? 'match' : 'matches' }}</h2>
         <button type="button" class="ui-btn h-9 text-xs" @click="browseIdeas"><i aria-hidden="true" class="fas fa-compass"></i>Explore search ideas</button>
       </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
@@ -177,7 +177,7 @@
           <template #actions>
             <button
               type="button"
-              class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 text-[13px] font-bold disabled:cursor-default"
+              class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 text-[0.8125rem] font-bold disabled:cursor-default"
               :class="requestButtonTone(item)"
               :disabled="isRequested(item) || isRequesting(item)"
               @click="requestItem(item)"
@@ -294,7 +294,7 @@
               v-for="option in visibleFeedbackOptions"
               :key="option.value"
               type="button"
-              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[0.8125rem] font-semibold disabled:opacity-50"
               :class="feedbackOf(selectedItem) === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-2 hover:border-ink-4'"
               :aria-pressed="(feedbackOf(selectedItem) === option.value).toString()"
               :disabled="feedbackSaving"
@@ -302,8 +302,8 @@
             >
               <span aria-hidden="true">{{ option.emoji }}</span>{{ option.label }}
             </button>
-            <button v-if="!feedbackExpanded" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[13px] font-semibold text-ink-4 hover:text-ink" @click="feedbackExpanded = true">
-              More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
+            <button v-if="!feedbackExpanded" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[0.8125rem] font-semibold text-ink-4 hover:text-ink" @click="feedbackExpanded = true">
+              More <i aria-hidden="true" class="fas fa-chevron-down text-[0.625rem]"></i>
             </button>
           </div>
           <p class="m-0 basis-full text-xs text-ink-4">Your answers steer future AI Search results and recommendations.</p>
@@ -341,6 +341,7 @@ import { useAuth } from '@/composables/useAuth.js';
 import { languageOptions } from '@/utils/titleLanguage.js';
 import { FEEDBACK_REASONS, visibleFeedbackOptions } from '@/utils/suggestionFeedback.js';
 import { LIMIT_MESSAGE, MAX_PEOPLE, addSelected, applyMention, filterPeople, findMentionQuery, toggleSelected } from '@/utils/aiSearchMentions.js';
+import { readStorage, writeStorage, removeStorage } from '@/utils/storage.js';
 
 // Answers that mean "not this one": the card leaves the results once they are chosen.
 const HIDING_FEEDBACK = ['not_interested', 'already_seen', 'seen_liked', 'seen_disliked', 'too_similar'];
@@ -367,7 +368,7 @@ const MOODS = [
 
 function readRecentSearches(key) {
   try {
-    const saved = JSON.parse(localStorage.getItem(key) || '[]');
+    const saved = JSON.parse(readStorage(key) || '[]');
     return Array.isArray(saved) ? [...new Set(saved.filter(item => typeof item === 'string' && item.trim()))].slice(0, 5) : [];
   } catch {
     return [];
@@ -376,7 +377,7 @@ function readRecentSearches(key) {
 
 function readOriginalLanguage(key) {
   try {
-    const saved = localStorage.getItem(key);
+    const saved = readStorage(key);
     return saved === 'any' || /^[a-z]{2}$/.test(saved || '') ? saved : 'auto';
   } catch {
     return 'auto';
@@ -434,7 +435,7 @@ export default {
       feedbackExpanded: false,
       feedbackSaving: false,
       feedbackReasons: FEEDBACK_REASONS,
-      excludeSeen: localStorage.getItem('suggestarr_ai_exclude_seen') === 'true',
+      excludeSeen: readStorage('suggestarr_ai_exclude_seen') === 'true',
       isResettingSeen: false,
       // Recent searches live on the server; historyKey only finds older browser-stored ones to import.
       historyKey,
@@ -444,14 +445,10 @@ export default {
 
   watch: {
     originalLanguage(value) {
-      try {
-        localStorage.setItem(this.languageKey, value);
-      } catch {
-        // The current search still works when browser storage is unavailable.
-      }
+      writeStorage(this.languageKey, value);
     },
     excludeSeen(val) {
-      localStorage.setItem('suggestarr_ai_exclude_seen', JSON.stringify(!!val));
+      writeStorage('suggestarr_ai_exclude_seen', JSON.stringify(!!val));
     },
   },
 
@@ -818,7 +815,7 @@ export default {
             const imported = await aiSearchHistoryImport(local);
             this.recentSearches = imported.data.history || [];
           }
-          localStorage.removeItem(this.historyKey);
+          removeStorage(this.historyKey);
         }
       } catch {
         // Recent searches are a convenience; searching works without them.

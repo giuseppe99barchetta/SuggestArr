@@ -4,6 +4,41 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 class CleanupMixin:
+    def get_recently_watched_titles(self, since: datetime) -> Set[tuple]:
+        """Return (media_type, tmdb_id) of requested titles first watched at or after ``since``.
+
+        ``recap_titles.watched_at`` is written by Python (ISO text with 'T' on SQLite), so ``since`` is
+        passed as a datetime, in the same format.
+
+        :param since: Naive UTC datetime.
+        :return: Set of (media_type, tmdb_id) tuples.
+        """
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT media_type, tmdb_id FROM recap_titles WHERE watched_at >= {placeholder}", (since,))
+            return {(row[0], str(row[1])) for row in cursor.fetchall()}
+
+    def prune_cleanup_log(self, older_than_days: int) -> int:
+        """Delete audit-log rows older than ``older_than_days``.
+
+        ``ran_at`` is written by CURRENT_TIMESTAMP, so the cutoff comes from the database's own clock.
+
+        :param older_than_days: Age limit in days.
+        :return: Number of rows deleted.
+        """
+        if self.db_type == 'sqlite':
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < datetime('now', '-' || ? || ' days')", (str(int(older_than_days)),)
+        elif self.db_type == 'postgres':
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < NOW() - (INTERVAL '1 day' * %s)", (int(older_than_days),)
+        else:  # mysql / mariadb
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < DATE_SUB(NOW(), INTERVAL %s DAY)", (int(older_than_days),)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount
+
     def get_cleanup_settings(self) -> dict:
         with self.get_connection() as conn:
             cursor = conn.cursor()
