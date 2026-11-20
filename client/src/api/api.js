@@ -26,6 +26,11 @@ export const getArrOptionsApi = (payload) => {
     return axios.post('/api/arr/options', payload);
 };
 
+// Options of a saved Radarr/Sonarr instance, for job owners (no credential overrides)
+export const getSavedArrOptionsApi = (service) => {
+    return axios.get('/api/arr/options', { params: { service } });
+};
+
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
     return axios.post('/api/jellyfin/test', { JELLYFIN_API_URL: url, JELLYFIN_TOKEN: token });

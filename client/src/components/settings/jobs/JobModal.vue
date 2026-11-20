@@ -397,7 +397,7 @@ import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
-import { getArrOptionsApi, listTraktJobUsers } from '@/api/api';
+import { getSavedArrOptionsApi, listTraktJobUsers } from '@/api/api';
 import { hasJobProfile, incompleteArrJobProfile, isChosen, jobProfilePayload } from '@/utils/requestProfiles.js';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
@@ -702,7 +702,7 @@ export default {
     await this.refreshTraktSetup();
     if (this.requestBackend === 'arr') {
       // Each instance on its own: one missing or unreachable must not hide the other.
-      const [radarr, sonarr] = await Promise.allSettled([getArrOptionsApi({ service: 'radarr' }), getArrOptionsApi({ service: 'sonarr' })]);
+      const [radarr, sonarr] = await Promise.allSettled([getSavedArrOptionsApi('radarr'), getSavedArrOptionsApi('sonarr')]);
       const options = (result) => {
         const data = result.status === 'fulfilled' ? result.value?.data : null;
         return data ? { profiles: data.profiles || [], rootFolders: data.rootFolders || [], tags: data.tags || [] } : null;

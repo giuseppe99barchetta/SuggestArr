@@ -1,8 +1,8 @@
 """Validate Radarr/Sonarr credentials and list their options without exposing keys."""
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
-from api_service.auth.middleware import require_role
+from api_service.auth.middleware import require_role, require_tab
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.arr.arr_client import SERVICES, ArrClient
 from api_service.services.config_service import ConfigService
@@ -13,13 +13,12 @@ arr_bp = Blueprint('arr', __name__)
 logger = LoggerManager.get_logger('ArrRoute')
 
 
-def _credentials():
-    """Return ``(service, url, key)`` from the request, or ``(error response, None, None)``.
+def _credentials(data):
+    """Return ``(service, url, key)`` from ``data``, or ``(error response, None, None)``.
 
-    The body is ``{service}`` (use the saved credentials) or a complete explicit
+    ``data`` is ``{service}`` (use the saved credentials) or a complete explicit
     ``{<S>_API_URL, <S>_TOKEN}`` tuple, never a mixture.
     """
-    data = request.get_json(silent=True)
     requested = data.get('service') if isinstance(data, dict) else None
     # Take the name from SERVICES itself, so no request value is echoed in a response.
     service = next((known for known in SERVICES if known == requested), None)
@@ -41,9 +40,12 @@ def _credentials():
     return service, api_url, api_key
 
 
-def _call(action, success_payload):
-    """Run ``action(client)`` against the requested instance and shape the JSON answer."""
-    service, api_url, api_key = _credentials()
+def _call(action, success_payload, data=None):
+    """Run ``action(client)`` against the requested instance and shape the JSON answer.
+
+    ``data`` defaults to the JSON body of the request (see ``_credentials``).
+    """
+    service, api_url, api_key = _credentials(request.get_json(silent=True) if data is None else data)
     if api_url is None:
         return service  # the error response
     name = service.capitalize()
@@ -76,3 +78,23 @@ def arr_options():
     """Quality profiles, root folders and tags of an instance (ids and names only)."""
     return _call(lambda client: client.get_options(),
                  lambda name, options: {'status': 'success', **options})
+
+
+@arr_bp.route('/options', methods=['GET'])
+@limiter.limit('20 per minute')
+def arr_saved_options():
+    """Options of a saved instance for job owners (``?service=radarr|sonarr``).
+
+    Like the Seer server lists, this only reads the saved credentials: any other argument
+    or a body is refused, so a non-admin can never point the server at an address.
+    """
+    if not getattr(g, 'current_user', None):
+        return jsonify({'error': 'Authentication required'}), 401
+    if set(request.args) != {'service'} or request.get_data():
+        return jsonify({'status': 'error', 'message': 'Only ?service is accepted.'}), 400
+    refused = require_tab('jobs')
+    if refused:
+        return refused
+    return _call(lambda client: client.get_options(),
+                 lambda name, options: {'status': 'success', **options},
+                 data={'service': request.args['service']})

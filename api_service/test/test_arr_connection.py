@@ -72,3 +72,36 @@ async def test_get_tmdb_ids_reads_every_title_and_skips_entries_without_tmdb_id(
     assert await client.get_tmdb_ids() == {'1399'}
     client._get.assert_awaited_once_with('series')
     assert client.api_url == 'http://sonarr:8989'
+
+
+def test_job_owner_reads_saved_options_without_credentials(monkeypatch):
+    client, factory, provider = client_as('user', monkeypatch)
+    provider.get_options = AsyncMock(return_value={'profiles': [{'id': 4, 'name': 'HD'}], 'rootFolders': [], 'tags': []})
+    response = client.get('/api/arr/options?service=radarr')
+    assert response.status_code == 200
+    assert response.get_json()['profiles'] == [{'id': 4, 'name': 'HD'}]
+    factory.assert_called_once_with('radarr', 'http://radarr:7878', 'saved-test-key')
+    assert 'saved-test-key' not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize('query', ['', '?service=plex', '?service=radarr&RADARR_API_URL=http://x',
+                                   '?service=radarr&RADARR_TOKEN=k'])
+def test_saved_options_refuse_overrides(query, monkeypatch):
+    client, factory, _ = client_as('user', monkeypatch)
+    assert client.get(f'/api/arr/options{query}').status_code == 400
+    factory.assert_not_called()
+
+
+def test_saved_options_need_login_and_the_jobs_page(monkeypatch):
+    client, factory, _ = client_as(None, monkeypatch)
+    assert client.get('/api/arr/options?service=radarr').status_code == 401
+    client, factory, _ = client_as('user', monkeypatch)
+    monkeypatch.setattr(routes, 'require_tab', lambda tab: ('refused', 403))
+    assert client.get('/api/arr/options?service=radarr').status_code == 403
+    factory.assert_not_called()
+
+
+def test_explicit_options_still_require_admin(monkeypatch):
+    client, factory, _ = client_as('user', monkeypatch)
+    assert client.post('/api/arr/options', json={'service': 'radarr'}).status_code == 403
+    factory.assert_not_called()
