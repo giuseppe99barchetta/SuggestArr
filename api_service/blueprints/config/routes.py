@@ -574,7 +574,8 @@ def save_user_openai_config():
             from flask import g
             validate_url(base_url, allow_private=g.current_user.get('role') == 'admin')
         except ValueError as exc:
-            return jsonify({'error': str(exc)}), 400
+            logger.info('Refused personal AI address: %s', exc)
+            return jsonify({'error': 'openai_base_url could not be resolved or points to a non-public address'}), 400
 
     from api_service.services.llm.llm_service import personal_llm_settings
     saved = personal_llm_settings(user_id)

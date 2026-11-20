@@ -20,8 +20,10 @@ def _credentials():
     ``{<S>_API_URL, <S>_TOKEN}`` tuple, never a mixture.
     """
     data = request.get_json(silent=True)
-    service = data.get('service') if isinstance(data, dict) else None
-    if service not in SERVICES:
+    requested = data.get('service') if isinstance(data, dict) else None
+    # Take the name from SERVICES itself, so no request value is echoed in a response.
+    service = next((known for known in SERVICES if known == requested), None)
+    if service is None:
         return (jsonify({'status': 'error', 'message': 'Unknown service.'}), 400), None, None
     name = service.capitalize()
     keys = (f'{service.upper()}_API_URL', f'{service.upper()}_TOKEN')
