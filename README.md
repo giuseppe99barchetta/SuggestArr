@@ -11,7 +11,7 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
+SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and requests them through **Seer** or straight to **Radarr** and **Sonarr**.
 
 ## Features
 
@@ -19,8 +19,8 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Recommendations** from TMDb, or from any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) with a short reason for each pick.
 - **AI Search**: describe what you want to watch in plain language and request results in one click.
 - **Public list import** from MDBList or Trakt, as a scheduled job or a single import.
-- **Request control**: optional approval before sending to Seer, pause jobs while Seer requests are pending or suggestions are still unwatched, auto-decline stale Seerr requests.
-- **Cleanup automation**: remove old SuggestArr requests that nobody added to favorites (dry-run by default).
+- **Request control**: optional approval before anything is requested, pause jobs while requests or downloads are still pending or suggestions are still unwatched, auto-decline stale Seerr requests (Seer only).
+- **Cleanup automation**: remove old SuggestArr requests that nobody added to favorites, with their media files, through Seer or in Radarr and Sonarr (off and dry-run by default).
 - **Filters**: skip content already on streaming services in your country, plus quality and per-user filters.
 - **Web interface** for setup, scheduling, users, requests and live logs, with connection tests during setup.
 - **Recaps and milestones** you can share ([details](docs/RECAP.md)).
@@ -45,7 +45,7 @@ Users in these screenshots are fictional; titles, ratings and posters come from 
 - **Docker** (recommended) or Python 3
 - A **[TMDb API key](https://www.themoviedb.org/documentation/api)**
 - **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)** or **[Emby](https://emby.media/)**
-- **[Seer](https://github.com/seerr-team/seerr)**
+- **[Seer](https://github.com/seerr-team/seerr)**, or **Radarr v5+** and **Sonarr v4+** for direct requests
 - Optional: PostgreSQL/MySQL, an OpenAI-compatible LLM, a [Trakt app](https://developer.trakt.tv/apps/new), a [Simkl app](https://simkl.com/settings/developer/)
 
 ## Quick start

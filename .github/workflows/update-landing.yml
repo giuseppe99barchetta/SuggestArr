@@ -1,0 +1,66 @@
+# Keeps the GitHub Pages landing (gh-pages branch) in step with the project:
+# - releases.json: the latest 3 published releases, read by the page instead of calling the GitHub API;
+# - assets/*.webp: the documentation screenshots from docs/assets/screenshots, re-encoded for the web.
+# Commits to gh-pages only when something changed.
+name: Update landing
+
+on:
+  release:
+    types: [published, edited, deleted]
+  push:
+    branches: [main]
+    paths: ["docs/assets/screenshots/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-landing
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          path: src
+
+      - name: Check out gh-pages
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Write releases.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=10" \
+            --jq '[.[] | select(.draft | not) | {tag_name, published_at, html_url, body}][:3]' > releases.tmp
+          # Never replace the file with an empty or broken list.
+          jq -e 'length > 0' releases.tmp > /dev/null
+          jq --indent 1 . releases.tmp > site/releases.json
+
+      - name: Convert screenshots to WebP
+        run: |
+          sudo apt-get install -y --no-install-recommends webp > /dev/null
+          for name in home requests ai-search jobs; do
+            cwebp -quiet -q 80 -metadata none "src/docs/assets/screenshots/$name.png" -o "site/assets/$name.webp"
+          done
+
+      - name: Commit changes
+        working-directory: site
+        run: |
+          git add releases.json assets/*.webp
+          if git diff --cached --quiet; then
+            echo "Landing already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(site): update releases and screenshots"
+          git push origin HEAD:gh-pages
