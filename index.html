@@ -1,268 +1,219 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>SuggestArr: automatic requests from what you watch</title>
+  <meta name="description" content="SuggestArr reads watch history from Jellyfin, Plex or Emby, finds similar titles with TMDb or AI, and requests them through Seer or Radarr and Sonarr.">
+  <link rel="canonical" href="https://giuseppe99barchetta.github.io/SuggestArr/">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f5f9" media="(prefers-color-scheme: light)">
 
-    <!-- Primary Meta Tags -->
-    <title>SuggestArr | Automate Your Media Requests</title>
-    <meta name="title" content="SuggestArr | Automate Your Media Requests">
-    <meta name="description"
-        content="SuggestArr is the ultimate media automation tool. It connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr to provide automated media recommendations and download requests.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="SuggestArr">
+  <meta property="og:url" content="https://giuseppe99barchetta.github.io/SuggestArr/">
+  <meta property="og:title" content="SuggestArr: automatic requests from what you watch">
+  <meta property="og:description" content="Self-hosted recommendations for Jellyfin, Plex and Emby, requested through Seer or straight to Radarr and Sonarr.">
+  <meta property="og:image" content="https://giuseppe99barchetta.github.io/SuggestArr/assets/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="SuggestArr: recommendations from what you watch, sent to Seer">
+  <meta name="twitter:card" content="summary_large_image">
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://giuseppe99barchetta.github.io/SuggestArr/">
-    <meta property="og:title" content="SuggestArr | Automate Your Media Requests">
-    <meta property="og:description"
-        content="SuggestArr connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr for an automated media experience.">
-    <meta property="og:image" content="https://github.com/user-attachments/assets/73da2f66-3792-4b63-9897-92ab10f61d28">
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://giuseppe99barchetta.github.io/SuggestArr/">
-    <meta property="twitter:title" content="SuggestArr | Automate Your Media Requests">
-    <meta property="twitter:description"
-        content="SuggestArr connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr for an automated media experience.">
-    <meta property="twitter:image"
-        content="https://github.com/user-attachments/assets/73da2f66-3792-4b63-9897-92ab10f61d28">
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
-
-    <!-- Links & Scripts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="landing-page.css">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preload" href="assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" type="module"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SuggestArr",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Docker, Linux",
+    "description": "Self-hosted tool that turns Jellyfin, Plex or Emby watch history into automatic requests through Seer or Radarr and Sonarr.",
+    "url": "https://giuseppe99barchetta.github.io/SuggestArr/",
+    "codeRepository": "https://github.com/giuseppe99barchetta/SuggestArr",
+    "license": "https://opensource.org/licenses/MIT",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
 </head>
-
 <body>
-    <div class="gradient-bg"></div>
+  <a class="skip" href="#main">Skip to content</a>
 
-    <header>
-        <div class="container">
-            <nav>
-                <div class="logo">
-                    <img src="img/logo.8e3a4916.png" alt="SuggestArr Logo">
-                </div>
-                <div class="nav-links">
-                    <a href="#features">Features</a>
-                    <a href="#how">How it Works</a>
-                    <a href="#releases">Releases</a>
-                    <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">GitHub</a>
-                </div>
-            </nav>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="#top" aria-label="SuggestArr home">
+        <img src="assets/logo.webp" width="51" height="28" alt="">
+        <span>SuggestArr</span>
+      </a>
+      <nav aria-label="Main">
+        <ul class="nav">
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#releases">Releases</a></li>
+          <li><a href="https://github.com/giuseppe99barchetta/SuggestArr">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <p class="eyebrow">Free, open source, self-hosted</p>
+      <h1 id="hero-title">Recommendations from what you watch, requested automatically.</h1>
+      <p class="lead">SuggestArr reads watch history from Jellyfin, Plex or Emby, finds similar titles with TMDb or an AI model, and requests them through Seer or straight to Radarr and Sonarr.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#install">Install with Docker</a>
+        <a class="btn btn-ghost" href="https://github.com/giuseppe99barchetta/SuggestArr">
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <figure class="shot shot-hero">
+        <img src="assets/home.webp" width="1440" height="900" fetchpriority="high" alt="SuggestArr home dashboard with request counts, a viewing recap and suggestions waiting for approval">
+      </figure>
+    </section>
+
+    <section class="band" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Watch</h3>
+            <p>SuggestArr reads what each user recently watched on Jellyfin, Plex or Emby. Trakt, Simkl and imported history can add more.</p>
+          </li>
+          <li>
+            <h3>Suggest</h3>
+            <p>It finds similar titles on TMDb, or asks an OpenAI-compatible model that gives a short reason for each pick. Filters skip what is already on your streaming services, below your quality bar or not for that user.</p>
+          </li>
+          <li>
+            <h3>Request</h3>
+            <p>Suggestions go to Seer, or straight to Radarr and Sonarr without Seer. Turn on approval to review each one first.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="wrap section" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">Features</h2>
+      <ul class="features">
+        <li>
+          <h3>AI Search</h3>
+          <p>Describe what you feel like watching in plain language and request a result in one click.</p>
+        </li>
+        <li>
+          <h3>Approval and control</h3>
+          <p>Approve suggestions before they are sent, pause jobs while requests or downloads are still pending, and auto-decline stale Seerr requests.</p>
+        </li>
+        <li>
+          <h3>Cleanup</h3>
+          <p>Removes old SuggestArr requests nobody added to favorites and can delete their media files, only for titles SuggestArr tagged. Off and in dry-run mode by default.</p>
+        </li>
+        <li>
+          <h3>List import</h3>
+          <p>Import public lists from MDBList or Trakt, once or on a schedule.</p>
+        </li>
+        <li>
+          <h3>Notifications and ratings</h3>
+          <p>Discord, Telegram and ntfy notifications that say why a title was picked, one-tap rating prompts, and shareable recaps.</p>
+        </li>
+        <li>
+          <h3>Built to self-host</h3>
+          <p>A web UI with a setup wizard, schedules and live logs. SQLite, PostgreSQL or MySQL. A public REST API with Swagger UI.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="band" id="screens" aria-labelledby="screens-title">
+      <div class="wrap">
+        <h2 id="screens-title">Screenshots</h2>
+        <div class="gallery">
+          <figure class="shot">
+            <img src="assets/requests.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Requests page listing titles sent to Seer, with posters and availability">
+            <figcaption>Requests</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/ai-search.webp" width="1440" height="900" loading="lazy" decoding="async" alt="AI Search results for a plain-language request">
+            <figcaption>AI Search</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/jobs.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Scheduled jobs and their recent runs">
+            <figcaption>Jobs</figcaption>
+          </figure>
         </div>
-    </header>
+        <p class="note">Users in these screenshots are fictional. Titles, ratings and posters come from TMDb. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+      </div>
+    </section>
 
-    <main>
-        <section class="hero">
-            <div class="container">
-                <span class="hero-tagline">Self-hosted automation for media enthusiasts</span>
-                <h1>Automate Your Media <br><span style="color: #3b82f6;">Discovery & Requests</span></h1>
-                <p>SuggestArr connects your media library with request services to automatically suggest and download
-                    content based on what your users are watching.</p>
-                <div class="cta-group">
-                    <a href="https://github.com/giuseppe99barchetta/SuggestArr" class="btn btn-primary" target="_blank">
-                        <i class="fab fa-github"></i> Get Started on GitHub
-                    </a>
-                    <a href="https://hub.docker.com/r/ciuse99/suggestarr" class="btn btn-secondary" target="_blank">
-                        <i class="fab fa-docker"></i> View on Docker Hub
-                    </a>
-                </div>
-            </div>
-        </section>
-
-        <section id="features" class="features">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Powerful Features</h2>
-                    <p>Everything you need to automate your media request workflow.</p>
-                </div>
-
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-server"></i></div>
-                        <h3>Multi-Media Server Support</h3>
-                        <p>Seamlessly integrates with Plex, Emby, and Jellyfin. Connect your existing library in
-                            minutes.</p>
-                    </div>
-
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-magic"></i></div>
-                        <h3>Intelligent Recommendations</h3>
-                        <p>Uses TMDb API to analyze watch history and find perfectly matched similar titles.</p>
-                    </div>
-
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-rocket"></i></div>
-                        <h3>Automated Workflows</h3>
-                        <p>Automatically sends requests to Jellyseerr or Overseer without lifting a finger.</p>
-                    </div>
-
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-terminal"></i></div>
-                        <h3>Real-Time Management</h3>
-                        <p>Monitor logs, manage cron schedules, and configure multi-user support from a sleek web UI.
-                        </p>
-                    </div>
-
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-user-check"></i></div>
-                        <h3>User Selection</h3>
-                        <p>Choose specific users to initiate requests, allowing granular management and approval.</p>
-                    </div>
-
-                    <div class="feature-card">
-                        <div class="feature-icon"><i class="fas fa-shield-halved"></i></div>
-                        <h3>Config Validation</h3>
-                        <p>Automatically validates API keys and URLs during setup to ensure everything works perfectly.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="ai" class="ai-section">
-            <div class="container">
-                <div class="section-title">
-                    <div class="ai-badge"><i class="fas fa-brain"></i> Advanced AI</div>
-                    <h2>Next-Gen Intelligence</h2>
-                    <p>Supercharge your media server with cutting-edge Large Language Models.</p>
-                </div>
-
-                <div class="features-grid">
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-robot"></i></div>
-                        <h3>LLM Provider Integration</h3>
-                        <p>Connect ChatGPT (OpenAI), Ollama, OpenRouter, LiteLLM, or any OpenAI-compatible endpoint with
-                            ease.</p>
-                    </div>
-
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-magnifying-glass-chart"></i></div>
-                        <h3>AI-Powered Search</h3>
-                        <p>Natural language search that understands what you want to watch. Personalized to your
-                            history and TMDb data.</p>
-                    </div>
-
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-lightbulb"></i></div>
-                        <h3>AI Rationale Display</h3>
-                        <p>Don't just get suggested, get explained. Each recommendation includes an "AI Reasoning"
-                            section.</p>
-                    </div>
-
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-sliders"></i></div>
-                        <h3>Enhanced Config</h3>
-                        <p>Granular settings for AI providers, including custom base URLs and improved visibility for
-                            all parameters.</p>
-                    </div>
-
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-clock-rotate-left"></i></div>
-                        <h3>Smart Context</h3>
-                        <p>Utilizes recent search history and automatic exclusion of already requested IDs for perfect
-                            results.</p>
-                    </div>
-
-                    <div class="feature-card ai-card">
-                        <div class="feature-icon"
-                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
-                                class="fas fa-sync"></i></div>
-                        <h3>Arr Profile Sync</h3>
-                        <p>Import and distinguish download profiles directly from Sonarr and Radarr automatically.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="how" class="how-it-works">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Simplify Your Library Growth</h2>
-                    <p>Set it up once and enjoy a self-maintaining media collection.</p>
-                </div>
-
-                <div class="steps">
-                    <div class="step">
-                        <div class="step-number">1</div>
-                        <div class="step-content">
-                            <h3>Connect Servers</h3>
-                            <p>Link your media server (Plex, Emby, or Jellyfin) and your request service (Jellyseerr or
-                                Overseer).</p>
-                        </div>
-                    </div>
-
-                    <div class="step">
-                        <div class="step-number">2</div>
-                        <div class="step-content">
-                            <h3>Define Rules</h3>
-                            <p>Set your schedules and preferences. Choose which users' history should trigger new
-                                requests.</p>
-                        </div>
-                    </div>
-
-                    <div class="step">
-                        <div class="step-number">3</div>
-                        <div class="step-content">
-                            <h3>Relax & Watch</h3>
-                            <p>Sit back while SuggestArr finds new content, checks availability, and triggers downloads
-                                automatically.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="releases" class="releases">
-            <div class="container">
-                <div class="section-title">
-                    <h2>Latest Updates</h2>
-                    <p>See what's new in the latest versions of SuggestArr.</p>
-                </div>
-
-                <div id="releases-list">
-                    <!-- Populated by JavaScript -->
-                    <p style="text-align: center; color: var(--text-dim);">Fetching latest releases...</p>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="container">
-            <div class="social-links">
-                <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank"><i
-                        class="fab fa-github"></i></a>
-                <a href="https://hub.docker.com/r/ciuse99/suggestarr" target="_blank"><i class="fab fa-docker"></i></a>
-            </div>
-            <p style="margin-bottom: 1rem;">&copy; 2024 SuggestArr. Open-source under MIT License.</p>
-            <p style="font-size: 0.875rem; color: var(--text-dim);">Built for home lab enthusiasts everywhere.</p>
+    <section class="wrap section" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install</h2>
+      <div class="install">
+        <div>
+          <h3>Docker Compose</h3>
+          <div class="code">
+            <button class="copy" type="button" data-copy="compose" hidden>Copy</button>
+<pre id="compose" tabindex="0" aria-label="docker-compose.yml"><code>services:
+  suggestarr:
+    image: ciuse99/suggestarr:latest
+    container_name: SuggestArr
+    restart: always
+    ports:
+      - "${SUGGESTARR_PORT:-5000}:${SUGGESTARR_PORT:-5000}"
+    volumes:
+      - ./config_files:/app/config/config_files
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000}</code></pre>
+          </div>
+          <p>Run <code>docker compose up -d</code>, open <code>http://localhost:5000</code> and follow the setup wizard. The image is also on <code>ghcr.io/giuseppe99barchetta/suggestarr</code>.</p>
+          <p class="status" role="status" aria-live="polite"></p>
         </div>
-    </footer>
+        <div>
+          <h3>You need</h3>
+          <ul class="list">
+            <li>Docker (or Python 3)</li>
+            <li>A free <a href="https://www.themoviedb.org/documentation/api">TMDb API key</a></li>
+            <li>Jellyfin, Plex or Emby</li>
+            <li><a href="https://github.com/seerr-team/seerr">Seer</a>, or Radarr v5+ and Sonarr v4+</li>
+            <li>Optional: an OpenAI-compatible model, PostgreSQL or MySQL</li>
+          </ul>
+          <h3>Other ways to install</h3>
+          <ul class="list">
+            <li><a href="https://apps.truenas.com/catalog/suggestarr_community/">TrueNAS SCALE</a> community catalog</li>
+            <li>Unraid Community Applications</li>
+            <li><a href="https://github.com/giuseppe99barchetta/SuggestArr/blob/main/docs/INSTALLATION.md">Installation guide</a>: source install, reverse proxy, authentication, backups</li>
+          </ul>
+        </div>
+      </div>
+    </section>
 
-    <!-- Scripts -->
-    <script src="landing-page.js"></script>
+    <section class="band" id="releases" aria-labelledby="releases-title">
+      <div class="wrap">
+        <h2 id="releases-title">Releases</h2>
+        <div id="release-list" class="releases"></div>
+        <p><a href="https://github.com/giuseppe99barchetta/SuggestArr/releases">All releases on GitHub</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <ul class="footer-links">
+        <li><a href="https://github.com/giuseppe99barchetta/SuggestArr">GitHub</a></li>
+        <li><a href="https://hub.docker.com/r/ciuse99/suggestarr">Docker Hub</a></li>
+        <li><a href="https://discord.gg/JXwFd3PnXY">Discord</a></li>
+        <li><a href="https://ko-fi.com/ciuse99">Ko-fi</a></li>
+        <li><a href="https://buymeacoffee.com/suggestarr">Buy Me a Coffee</a></li>
+      </ul>
+      <p>© 2026 SuggestArr · MIT licence · Data from TMDb</p>
+    </div>
+  </footer>
 </body>
-
 </html>
