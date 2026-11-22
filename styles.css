@@ -307,7 +307,7 @@ img { max-width: 100%; height: auto; display: block; }
 .release[open] summary::before { transform: rotate(45deg); }
 .release-version { color: var(--ink); font-weight: 800; font-size: 1.1rem; margin-right: auto; }
 .release-date { color: var(--ink-3); font-size: 0.9rem; }
-.release-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--edge); }
+.release-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--edge); overflow-wrap: anywhere; }
 .release-body > :first-child { margin-top: 1rem; }
 .release-body ul, .release-body ol { padding-left: 1.25rem; }
 .release-body li { margin-bottom: 0.35rem; }
