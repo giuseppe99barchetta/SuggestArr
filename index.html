@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>SuggestArr: automatic requests from what you watch</title>
   <meta name="description" content="SuggestArr reads watch history from Jellyfin, Plex or Emby, finds similar titles with TMDb or AI, and requests them through Seer or Radarr and Sonarr.">
@@ -57,6 +57,7 @@
           <li><a href="#how">How it works</a></li>
           <li><a href="#features">Features</a></li>
           <li><a href="#install">Install</a></li>
+          <li><a href="#faq">FAQ</a></li>
           <li><a href="#releases">Releases</a></li>
           <li><a href="https://github.com/giuseppe99barchetta/SuggestArr">GitHub</a></li>
         </ul>
@@ -84,18 +85,19 @@
     <section class="band" id="how" aria-labelledby="how-title">
       <div class="wrap">
         <h2 id="how-title">How it works</h2>
+        <p class="section-lead">Three steps, on the schedule you choose.</p>
         <ol class="steps">
           <li>
             <h3>Watch</h3>
-            <p>SuggestArr reads what each user recently watched on Jellyfin, Plex or Emby. Trakt, Simkl and imported history can add more.</p>
+            <p>Reads what each user recently watched on Jellyfin, Plex or Emby, plus Trakt, Simkl or imported history.</p>
           </li>
           <li>
             <h3>Suggest</h3>
-            <p>It finds similar titles on TMDb, or asks an OpenAI-compatible model that gives a short reason for each pick. Filters skip what is already on your streaming services, below your quality bar or not for that user.</p>
+            <p>Finds similar titles on TMDb, or asks an AI model that explains each pick. Filters skip what you already stream or don't want.</p>
           </li>
           <li>
             <h3>Request</h3>
-            <p>Suggestions go to Seer, or straight to Radarr and Sonarr without Seer. Turn on approval to review each one first.</p>
+            <p>Sends them to Seer, or straight to Radarr and Sonarr. Turn on approval to review each one first.</p>
           </li>
         </ol>
       </div>
@@ -136,15 +138,15 @@
         <h2 id="screens-title">Screenshots</h2>
         <div class="gallery">
           <figure class="shot">
-            <img src="assets/requests.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Requests page listing titles sent to Seer, with posters and availability">
+            <a href="assets/requests.webp"><img src="assets/requests.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Requests page listing titles sent to Seer, with posters and availability"></a>
             <figcaption>Requests</figcaption>
           </figure>
           <figure class="shot">
-            <img src="assets/ai-search.webp" width="1440" height="900" loading="lazy" decoding="async" alt="AI Search results for a plain-language request">
+            <a href="assets/ai-search.webp"><img src="assets/ai-search.webp" width="1440" height="900" loading="lazy" decoding="async" alt="AI Search results for a plain-language request"></a>
             <figcaption>AI Search</figcaption>
           </figure>
           <figure class="shot">
-            <img src="assets/jobs.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Scheduled jobs and their recent runs">
+            <a href="assets/jobs.webp"><img src="assets/jobs.webp" width="1440" height="900" loading="lazy" decoding="async" alt="Scheduled jobs and their recent runs"></a>
             <figcaption>Jobs</figcaption>
           </figure>
         </div>
@@ -187,21 +189,48 @@
           <h3>Other ways to install</h3>
           <ul class="list">
             <li><a href="https://apps.truenas.com/catalog/suggestarr_community/">TrueNAS SCALE</a> community catalog</li>
-            <li>Unraid Community Applications</li>
+            <li><a href="https://github.com/giuseppe99barchetta/SuggestArr/blob/main/docs/INSTALLATION.md#unraid">Unraid</a>: search for SuggestArr in Community Applications</li>
             <li><a href="https://github.com/giuseppe99barchetta/SuggestArr/blob/main/docs/INSTALLATION.md">Installation guide</a>: source install, reverse proxy, authentication, backups</li>
           </ul>
         </div>
       </div>
     </section>
 
-    <section class="band" id="releases" aria-labelledby="releases-title">
+    <section class="band" id="faq" aria-labelledby="faq-title">
       <div class="wrap">
-        <h2 id="releases-title">Releases</h2>
-        <div id="release-list" class="releases"></div>
-        <p><a href="https://github.com/giuseppe99barchetta/SuggestArr/releases">All releases on GitHub</a></p>
+        <h2 id="faq-title">Questions</h2>
+        <dl class="faq">
+          <div>
+            <dt>Do I need Seer?</dt>
+            <dd>No. SuggestArr can request through Seer, straight to Radarr v5+ and Sonarr v4+, or both. Only auto-declining old pending requests still needs Seer.</dd>
+          </div>
+          <div>
+            <dt>Do I need an AI model, and what does it cost?</dt>
+            <dd>No. Without one, suggestions come from TMDb, which only needs a free API key. With one, the cost depends on your provider. A local model such as Ollama or LM Studio costs nothing per request.</dd>
+          </div>
+          <div>
+            <dt>What does the AI provider receive?</dt>
+            <dd>The titles each user recently watched, with their type and genres, and titles to leave out. A group AI Search also sends the names of the people you picked. With a local model, all of this stays on your network.</dd>
+          </div>
+          <div>
+            <dt>What does cleanup delete?</dt>
+            <dd>Nothing until you turn it on, and it starts in dry-run mode, listing what it would remove. In real mode it removes old requests SuggestArr made that nobody added to favorites, with their media files. A run that would delete a lot waits for an admin to confirm.</dd>
+          </div>
+        </dl>
       </div>
     </section>
+
+    <section class="wrap section" id="releases" aria-labelledby="releases-title">
+      <h2 id="releases-title">Releases</h2>
+      <div id="release-list" class="releases"></div>
+      <p><a href="https://github.com/giuseppe99barchetta/SuggestArr/releases">All releases on GitHub</a></p>
+    </section>
   </main>
+
+  <dialog id="viewer" class="viewer" aria-label="Screenshot">
+    <button class="viewer-close" type="button">Close</button>
+    <div class="viewer-frame"></div>
+  </dialog>
 
   <footer class="site-footer">
     <div class="wrap footer-row">

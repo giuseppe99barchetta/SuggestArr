@@ -193,23 +193,48 @@ img { max-width: 100%; height: auto; display: block; }
 }
 .shot-hero img { margin-inline: auto; box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.6); }
 .shot figcaption { margin-top: 0.6rem; font-weight: 700; color: var(--ink); }
+.shot a { display: block; border-radius: var(--radius-card); cursor: zoom-in; }
+.shot a:hover img { border-color: var(--brand-ink); }
 
-/* How it works */
+/* How it works: numbered circles joined by a line on wide screens. */
+.section-lead { color: var(--ink-3); font-size: 1.05rem; margin: -0.25rem 0 0; }
 .steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 2rem;
-  margin: 2rem 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 2rem 3rem;
+  margin: 2.5rem 0 0;
   padding: 0;
   list-style: none;
   counter-reset: step;
 }
-.steps li { counter-increment: step; }
-.steps h3::before {
-  content: counter(step) ". ";
+.steps li { position: relative; counter-increment: step; }
+.steps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--brand);
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
   color: var(--brand-ink);
+  font-size: 1.25rem;
+  font-weight: 800;
 }
-.steps p { margin: 0; }
+.steps h3 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+.steps p { margin: 0; max-width: 34ch; }
+@media (min-width: 56rem) {
+  .steps { grid-template-columns: repeat(3, 1fr); }
+  .steps li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 1.5rem;
+    left: 4rem;
+    right: -2rem;
+    border-top: 2px dashed color-mix(in srgb, var(--brand) 45%, transparent);
+  }
+}
 
 /* Features */
 .features {
@@ -279,7 +304,7 @@ img { max-width: 100%; height: auto; display: block; }
 /* Releases */
 .releases { display: grid; gap: 0.75rem; margin: 2rem 0 1.5rem; }
 .release {
-  background: var(--canvas);
+  background: var(--panel);
   border: 1px solid var(--edge);
   border-radius: var(--radius-card);
 }
@@ -294,6 +319,7 @@ img { max-width: 100%; height: auto; display: block; }
   list-style: none;
   border-radius: var(--radius-card);
 }
+.release summary:hover { background: var(--panel-2); }
 .release summary::-webkit-details-marker { display: none; }
 .release summary::before {
   content: "";
@@ -308,13 +334,56 @@ img { max-width: 100%; height: auto; display: block; }
 .release-version { color: var(--ink); font-weight: 800; font-size: 1.1rem; margin-right: auto; }
 .release-date { color: var(--ink-3); font-size: 0.9rem; }
 .release-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--edge); overflow-wrap: anywhere; }
-.release-body > :first-child { margin-top: 1rem; }
+.release-body > .visually-hidden + * { margin-top: 1.25rem; }
+.release-body > :is(p, ul, ol, blockquote) { max-width: 65ch; }
 .release-body ul, .release-body ol { padding-left: 1.25rem; }
 .release-body li { margin-bottom: 0.35rem; }
 .release-body hr { border: 0; border-top: 1px solid var(--edge); margin: 1.5rem 0; }
 .release-body blockquote { margin: 1rem 0; padding-left: 1rem; border-left: 3px solid var(--brand); }
 .release-body strong { color: var(--ink); }
 .release-more { margin: 1rem 0 0; }
+
+/* FAQ */
+.faq {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  gap: 1.75rem 3rem;
+  margin: 2rem 0 0;
+}
+.faq dt { color: var(--ink); font-weight: 700; font-size: 1.125rem; margin-bottom: 0.4rem; }
+.faq dd { margin: 0; max-width: 60ch; }
+
+/* Screenshot viewer: the whole image fits the screen, Close sits above it. */
+.viewer {
+  max-width: 96vw;
+  max-height: 96vh;
+  padding: 0.5rem;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: var(--ink);
+}
+.viewer::backdrop { background: rgb(0 0 0 / 0.8); }
+.viewer-close {
+  display: block;
+  margin: 0 0 0.5rem auto;
+  min-height: 2.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-ctl);
+  border: 1px solid var(--edge-strong);
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.viewer-close:hover { border-color: var(--ink-3); }
+.viewer img {
+  width: auto;
+  max-width: calc(96vw - 1rem - 2px);
+  max-height: calc(96vh - 4rem);
+  border-radius: calc(var(--radius-card) - 0.5rem);
+}
 
 /* Footer */
 .site-footer { padding-block: 2.5rem; font-size: 0.9rem; color: var(--ink-3); }
@@ -329,9 +398,40 @@ img { max-width: 100%; height: auto; display: block; }
   html { scroll-padding-top: 1rem; }
 }
 
-/* Motion only when the user has not asked to reduce it. */
+/* Motion only when the user has not asked to reduce it. Content is fully visible without it. */
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }
-  .btn, .copy, .release summary::before { transition: transform 0.15s ease-out, opacity 0.15s ease-out; }
+  .btn, .copy, .release summary::before, .features li, .shot img {
+    transition: transform 0.2s ease-out, border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+  }
   .btn:hover { transform: translateY(-1px); }
+  .features li:hover { transform: translateY(-3px); border-color: var(--edge-strong); }
+  .shot a:hover img { transform: scale(1.015); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(1rem); } }
+  @keyframes zoom { from { opacity: 0; transform: scale(0.97); } }
+  @keyframes fade { from { opacity: 0; } }
+
+  /* Hero: a short staggered entrance on load. */
+  .hero > * { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .hero > :nth-child(2) { animation-delay: 0.06s; }
+  .hero > :nth-child(3) { animation-delay: 0.12s; }
+  .hero > :nth-child(4) { animation-delay: 0.18s; }
+  .hero > :nth-child(5) { animation-delay: 0.28s; animation-duration: 0.8s; }
+
+  .release[open] .release-body { animation: fade 0.25s ease-out; }
+  .viewer[open] { animation: zoom 0.2s ease-out; }
+  .viewer[open]::backdrop { animation: fade 0.2s ease-out; }
+
+  /* Steps, features and screenshots rise as they scroll in, where the browser supports it (no JS). */
+  @supports (animation-timeline: view()) {
+    .steps li, .features li, .gallery .shot, .faq > div {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
 }
+
+/* 404 page */
+.notfound { text-align: center; min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 0.5rem; }

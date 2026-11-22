@@ -1,6 +1,7 @@
-// SuggestArr landing: latest releases + copy button. Never parses HTML: every node is built with
+// SuggestArr landing: latest releases, screenshot viewer and copy button. Never parses HTML: every node is built with
 // createElement/textContent, so release text cannot add markup, run script or load resources.
-const RELEASES_API = "https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases?per_page=3";
+// Written next to the page by the "Update landing" workflow on every release (same origin, no rate limit).
+const RELEASES_URL = "releases.json";
 
 function el(tag, text) {
   const node = document.createElement(tag);
@@ -174,8 +175,8 @@ async function loadReleases() {
   list.replaceChildren(el("p", "Loading releases…"));
   list.setAttribute("aria-busy", "true");
   try {
-    const response = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } });
-    if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+    const response = await fetch(RELEASES_URL, { cache: "no-cache" });
+    if (!response.ok) throw new Error(`releases.json ${response.status}`);
     const releases = await response.json();
     if (!Array.isArray(releases) || releases.length === 0) throw new Error("No releases");
     list.replaceChildren(...releases.slice(0, 3).map(releaseCard));
@@ -205,5 +206,30 @@ function setUpCopy() {
   }
 }
 
+// Screenshot links open the image in a modal <dialog>; without JS they open the file itself.
+function setUpViewer() {
+  const dialog = document.getElementById("viewer");
+  if (!dialog || typeof dialog.showModal !== "function") return;
+  const frame = dialog.querySelector(".viewer-frame");
+  dialog.querySelector(".viewer-close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+  dialog.addEventListener("close", () => frame.replaceChildren());
+  for (const link of document.querySelectorAll(".shot a")) {
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      const thumb = link.querySelector("img");
+      const img = el("img");
+      img.src = link.href;
+      img.alt = thumb ? thumb.alt : "";
+      img.width = 1440;
+      img.height = 900;
+      frame.replaceChildren(img);
+      dialog.showModal();
+    });
+  }
+}
+
 setUpCopy();
+setUpViewer();
 loadReleases();
