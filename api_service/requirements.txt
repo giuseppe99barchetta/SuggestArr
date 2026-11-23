@@ -23,5 +23,5 @@ tzdata==2026.6
 mysql-connector-python==26.10.0
 psycopg2-binary==2.9.13
 
-openai==3.51.0
+openai==3.57.0
 prometheus-client==0.26.0
