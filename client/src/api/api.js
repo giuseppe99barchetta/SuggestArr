@@ -341,3 +341,4 @@ export const runRequestExpiry = (dry_run) => axios.post('/api/automation/request
 export const getRequestExpiryLog = (limit = 100) => axios.get('/api/automation/requests/expiry/log', { params: { limit } });
 export const runRequestReplacements = () => axios.post('/api/automation/requests/replacements/run');
 export const getRequestReplacementLog = () => axios.get('/api/automation/requests/replacements/log');
+export const runSeasonFollowup = () => axios.post('/api/automation/season-followup/run');

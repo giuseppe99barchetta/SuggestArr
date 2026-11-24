@@ -49,6 +49,7 @@ class ArrClient(BaseHTTPClient):
         self.private_urls = self.allowed_urls = (self.api_url,)
         self._tag_ids = {}  # label -> id, cached for this client's lifetime
         self._library = None  # tmdb id -> title, read once per client by find_owned
+        self.last_add_existed = False  # whether the last add() found the title already there
         self._tags_loaded = False
         self._options = None  # (quality profile ids, root folder paths), read once per client by add
 
@@ -214,14 +215,85 @@ class ArrClient(BaseHTTPClient):
                         addOptions={'searchForMissingEpisodes': True})
 
         status, data = await self._request('POST', endpoint, json=item)
+        self.last_add_existed = False
         if status in (200, 201):
             return True
+        self.last_add_existed = True  # lets callers tell a conflict from a fresh add
         if status == 409:
             return True  # already added (conflict): delivery is idempotent
         if status == 400 and isinstance(data, list) and any(
                 isinstance(e, dict) and e.get('errorCode') in _EXISTS_CODES for e in data):
             return True  # already added: delivery is idempotent
+        self.last_add_existed = False
         raise ArrHTTPError(f'{self.service.capitalize()} rejected tmdb:{tmdb_id} (HTTP {status})', status)
+
+    async def _series_by_tmdb(self, tmdb_id, refresh=False):
+        """Return the Sonarr series with this TMDb id from the (cached) library, or None."""
+        if self._library is None or refresh:
+            self._library = {str(item['tmdbId']): item for item in await self._get_list('series')
+                             if isinstance(item, dict) and item.get('tmdbId') and 'id' in item}
+        return self._library.get(str(tmdb_id))
+
+    async def _monitor_season(self, series, season):
+        """Monitor one season of an existing series and search it.
+
+        :return: True once the season is monitored and searched; False when Sonarr does not know
+            the season yet (a refresh is started so a later run finds it).
+        :raises ArrHTTPError: When Sonarr rejects the update or the search.
+        """
+        target = next((s for s in series.get('seasons') or [] if s.get('seasonNumber') == season), None)
+        if target is None:
+            await self._request('POST', 'command', json={'name': 'RefreshSeries', 'seriesId': series['id']})
+            self.logger.info("Sonarr does not list season %s of tmdb:%s yet; refreshing the series.",
+                             season, series.get('tmdbId'))
+            return False
+        if not target.get('monitored') or not series.get('monitored'):
+            target['monitored'] = True
+            series['monitored'] = True
+            status, _ = await self._request('PUT', f"series/{int(series['id'])}", json=series)
+            if status not in (200, 201, 202):
+                raise ArrHTTPError(f'Sonarr refused to monitor season {season} of tmdb:{series.get("tmdbId")} '
+                                   f'(HTTP {status})', status)
+        status, _ = await self._request('POST', 'command', json={
+            'name': 'SeasonSearch', 'seriesId': series['id'], 'seasonNumber': season})
+        if status not in (200, 201):
+            raise ArrHTTPError(f'Sonarr refused to search season {season} (HTTP {status})', status)
+        return True
+
+    async def request_season(self, tmdb_id, season, profile, extra_labels=()):
+        """Get one season of a show into Sonarr: monitor and search it, adding the series if needed.
+
+        :param tmdb_id: TMDb id of the show.
+        :param season: Season number to monitor.
+        :param profile: Default Sonarr profile (``profileId``, ``rootFolder``, optional ``tags``),
+            used only when the series is not in Sonarr yet.
+        :param extra_labels: Further tag labels for a newly added series.
+        :return: True when the season is confirmed monitored; False when Sonarr does not know the
+            season yet (retry later).
+        :raises RuntimeError: When Sonarr rejects the request.
+        """
+        series = await self._series_by_tmdb(tmdb_id)
+        if series is not None:
+            return await self._monitor_season(series, season)
+        found = await self._get('series/lookup', params={'term': f'tmdb:{int(tmdb_id)}'})
+        item = next((i for i in found if isinstance(i, dict) and i.get('tmdbId') == int(tmdb_id)), None) \
+            if isinstance(found, list) else None
+        if item is None or not any(s.get('seasonNumber') == season for s in item.get('seasons') or []):
+            self.logger.info("Sonarr's lookup has no season %s for tmdb:%s yet; retrying later.", season, tmdb_id)
+            return False
+        await self.add({'mediaType': 'tv', 'mediaId': int(tmdb_id), 'profileId': profile.get('profileId'),
+                        'rootFolder': profile.get('rootFolder'), 'tags': list(profile.get('tags') or []),
+                        'seasons': [season]}, extra_labels)
+        series = await self._series_by_tmdb(tmdb_id, refresh=True)
+        if series is None:
+            return False
+        if not self.last_add_existed:
+            # add() builds the series from its own lookup: confirm the season really is monitored.
+            target = next((s for s in series.get('seasons') or [] if s.get('seasonNumber') == season), None)
+            if target is not None and target.get('monitored') and series.get('monitored'):
+                return True  # a fresh add searches what it monitors
+        # Someone added the series meanwhile, or the add left the season out: monitor and search it.
+        return await self._monitor_season(series, season)
 
     async def find_owned(self, tmdb_id):
         """Find a title and tell whether SuggestArr added it (it carries the ``suggestarr`` tag).

@@ -104,7 +104,7 @@ class RequestMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            if self.db_type in ['mysql', 'postgres']:
+            if self.db_type in ['mysql', 'mariadb', 'postgres']:
                 query = query.replace("?", "%s")
             
             cursor.execute(query, params)

@@ -57,14 +57,16 @@ class YearWatchActivity(BaseHTTPClient):
             headers['Authorization'] = f'MediaBrowser Token="{token}"'
         return headers
 
-    async def _scan(self, plex, ids, url, headers, start, end, server=False):
+    async def _scan(self, plex, ids, url, headers, start, end, server=False, max_pages=MAX_PAGES):
         """Read played movies and episodes between ``start`` (inclusive) and ``end`` (exclusive).
 
         :param plex: ``True`` for Plex history, ``False`` for the Jellyfin last-played snapshot.
         :param ids: Account IDs to read; ignored when ``server`` is set.
         :param server: Read every account on the server.
+        :param max_pages: Pages of ``PAGE_SIZE`` plays read per account before the scan counts as truncated.
         :return: Tuple ``(entries, truncated)``. Each entry has ``account``, ``kind``, ``id``,
-            ``series_id``, ``date`` and ``tmdb`` (when the provider reports it inline).
+            ``series_id``, ``date``, ``tmdb`` (when the provider reports it inline) and, for
+            episodes, ``season`` and ``episode`` numbers (None when the server omits them).
         """
         if server:
             ids = [None] if plex else [str(user['Id']) for user in await self._json(f'{url}/Users', headers)]
@@ -73,7 +75,7 @@ class YearWatchActivity(BaseHTTPClient):
         for user_id in ids[:MAX_PROFILES]:
             seen_pages = set()
             offset = 0
-            for page in range(MAX_PAGES):
+            for page in range(max_pages):
                 if plex:
                     params = {'sort': 'viewedAt:desc', 'X-Plex-Container-Start': offset,
                               'X-Plex-Container-Size': PAGE_SIZE}
@@ -123,7 +125,9 @@ class YearWatchActivity(BaseHTTPClient):
                                     'title': item.get(('title' if plex else 'Name') if kind == 'movie'
                                                       else ('grandparentTitle' if plex else 'SeriesName')),
                                     # An episode's year is not its show's year.
-                                    'year': item.get('year' if plex else 'ProductionYear') if kind == 'movie' else None})
+                                    'year': item.get('year' if plex else 'ProductionYear') if kind == 'movie' else None,
+                                    'season': item.get('parentIndex' if plex else 'ParentIndexNumber') if kind == 'episode' else None,
+                                    'episode': item.get('index' if plex else 'IndexNumber') if kind == 'episode' else None})
                 if not items or (dates and max(dates) < start):
                     break
                 offset += len(items)
@@ -131,7 +135,7 @@ class YearWatchActivity(BaseHTTPClient):
                     break
                 if total is None and len(items) < PAGE_SIZE:
                     break
-                if page == MAX_PAGES - 1:
+                if page == max_pages - 1:
                     truncated = True
         return entries, truncated
 
@@ -250,8 +254,9 @@ class RecapWatchSync(YearWatchActivity):
         keys = sorted({lookup(entry) for entry in entries
                        if not entry['tmdb'] and (entry['kind'] == 'movie' or entry['series_id'])})
         resolved, failed = {}, set()
-        for i in range(0, len(keys), RESOLVE_BATCH):
-            batch = keys[i:i + RESOLVE_BATCH]
+        batches = [keys[i:i + RESOLVE_BATCH] for i in range(0, len(keys), RESOLVE_BATCH)]
+        while batches:
+            batch = batches.pop(0)
             try:
                 if plex:
                     payload = await self._json(f'{url}/library/metadata/{",".join(quote(key, safe="") for key in batch)}',
@@ -272,6 +277,9 @@ class RecapWatchSync(YearWatchActivity):
                 self.logger.debug('Recap watch sync could not resolve a metadata batch: %s', type(exc).__name__)
                 if getattr(exc, 'status', None) != 404:
                     failed.update(batch)
+                elif len(batch) > 1:
+                    # One removed item can 404 the whole batch: look the others up one by one.
+                    batches.extend([key] for key in batch)
         for entry in entries:
             if not entry['tmdb']:
                 entry['tmdb'] = resolved.get(lookup(entry))

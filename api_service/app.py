@@ -368,6 +368,13 @@ def _start_background_services():
             run_request_replacements, 'interval', minutes=15, id='seer_request_replacements',
             max_instances=1, replace_existing=True,
         )
+        # Next-season follow-up: always scheduled, a no-op until enabled in Settings.
+        from api_service.jobs.season_followup import run_season_followup
+        job_manager.scheduler.add_job(
+            run_season_followup, 'interval', hours=6, id='season_followup',
+            max_instances=1, replace_existing=True,
+            next_run_time=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=2),
+        )
         # Requested -> processing -> available badges and the request.available webhook.
         job_manager.scheduler.add_job(
             run_availability_sync, 'interval', minutes=30, id='seer_availability_sync',
@@ -375,7 +382,7 @@ def _start_background_services():
             # First pass shortly after start-up, so badges appear without waiting half an hour.
             next_run_time=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=1),
         )
-        logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry + request_replacements + availability_sync)")
+        logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry + request_replacements + season_followup + availability_sync)")
     except Exception as e:
         import traceback
         logger.error(f"Failed to initialize discover jobs scheduler: {e}")

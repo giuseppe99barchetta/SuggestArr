@@ -99,6 +99,8 @@ class SeerClient(BaseHTTPClient):
 
     # Set while a delivery runs when Seer could not be reached (network error, timeout, 502/503/504).
     _transport_failed = False
+    _last_status = None  # HTTP status of the last answer from Seer
+    _last_error = None  # error message of the last failed answer from Seer
     
     # Override HTTP_OK to include 202 Accepted for async operations
     HTTP_OK = {200, 201, 202}
@@ -191,6 +193,7 @@ class SeerClient(BaseHTTPClient):
             try:
                 async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT) as response:
                     self.logger.debug("Received response with status %d for request to %s", response.status, url)
+                    self._last_status = response.status
                     if response.status in HTTP_OK:
                         return await response.json()
                     elif response.status == 403:
@@ -226,8 +229,9 @@ class SeerClient(BaseHTTPClient):
                         if response.status in (502, 503, 504):
                             self._transport_failed = True
                         resp = await response.json()
+                        self._last_error = str(resp.get('message') or resp.get('error', 'Unknown error'))
                         self.logger.error(
-                            f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
+                            f"Request to {url} failed with status: {response.status}, {self._last_error}"
                         )
             except aiohttp.ClientError as e:
                 self.logger.error(f"Client error during request to {url}: {e}")
@@ -710,6 +714,47 @@ class SeerClient(BaseHTTPClient):
         )
         return False
             
+    async def request_seasons(self, tmdb_id, tvdb_id, seasons):
+        """Request specific seasons of a show right away, as the configured Seer user.
+
+        Used by the next-season follow-up, which retries on its next run instead of queueing.
+
+        :param tmdb_id: TMDb id of the show.
+        :param tvdb_id: TVDB id of the show, or None.
+        :param seasons: Season numbers to request.
+        :return: True when Seer accepted the request or already has it (HTTP 409), else False.
+        :raises BackendUnavailableError: When Seer could not be reached.
+        """
+        payload = {'mediaType': 'tv', 'mediaId': int(tmdb_id), 'seasons': [int(n) for n in seasons]}
+        if tvdb_id:
+            payload['tvdbId'] = int(tvdb_id)
+        self._last_status = self._last_error = None
+        self._transport_failed = False
+        # Seer fills the server, profile and root folder from its own defaults when they are left out.
+        if self.username and self.password:
+            await self.login()
+            if not self.session_token:
+                if self._transport_failed:
+                    raise BackendUnavailableError("Seer did not answer the login", "Seer")
+                self.logger.error("Season follow-up: the configured Seer user could not log in.")
+                return False
+        try:
+            # One attempt only: the job's next run is the retry, so SEER_REQUEST_DELAY always holds.
+            use_cookie = bool(self.session_token)
+            response = await self._make_request('POST', 'api/v1/request', data=payload, use_cookie=use_cookie,
+                                                raise_on_permission=use_cookie, retries=1)
+        except SeerPermissionError as exc:
+            self.logger.error("Configured Seer user cannot request seasons (%s).", exc)
+            return False
+        if response and 'error' not in response:
+            return True
+        # Seer answers a duplicate with 409 ("Request for this media already exists").
+        if self._last_status == 409 or 'already exists' in (self._last_error or '').lower():
+            return True
+        if self._transport_failed:
+            raise BackendUnavailableError("Seer is unreachable or answered 502/503/504", "Seer")
+        return False
+
     async def _post_request_as_configured_user(self, data: dict):
         """POST a request to Seer as the configured user, retrying once on a 403.
 

@@ -138,6 +138,24 @@ Under **Approvals -> Seerr pending requests**, set **Auto-decline after (days)**
 
 Only new requests delivered by SuggestArr after upgrading can be tracked, including deliveries made while expiry is disabled. Existing requests are excluded. Age starts at creation in Seerr. Approved requests and media files are untouched; SuggestArr keeps its history and duplicate guards. The Seerr API key needs `MANAGE_REQUESTS` or `ADMIN` permissions for real declines.
 
+### Next-season follow-up
+
+Under **Advanced -> Next-season follow-up**, turn on **Request the next season automatically** to request season N+1 of a show when people on your media server get close to the end of season N. Off by default.
+
+Every 6 hours the job reads the episode history of **all accounts** on the selected Plex, Jellyfin or Emby server and tracks, per show, the furthest episode watched. It requests the next season when that episode is within **Episodes before the end** of the finale (default 2; `0` waits for the finale) and the show was watched within **Ignore shows not watched for** days (default 180). If the next season is not announced yet, the show stays tracked and the season is requested on the first run after TMDb lists it. **Only shows SuggestArr requested** limits it to shows SuggestArr itself requested. **Run now** starts a run from the same page.
+
+Limits:
+
+- Only media-server history counts; Trakt and Simkl history is not used.
+- Requests go out as the configured Seer user (bypassing Seer's per-user approval) or straight to Sonarr, so enable it deliberately.
+- Delivery is at-least-once: after a crash a season can be requested twice. The duplicate is harmless, since Seer and Sonarr treat it as already requested.
+- On very large servers only the latest 50,000 plays per account in the window are read; older plays may be missed.
+- On Jellyfin and Emby only the first 50 accounts are read; plays from further accounts are not counted.
+- History imported into an account after its server was first scanned is not read back if it is older than the last scan; new plays always count.
+- A show the media server cannot match to TMDb is skipped. Once its metadata is fixed, it is tracked from its next play.
+- Seer requests follow **SEER_REQUEST_DELAY**; when the follow-up and the request queue send at the same moment, one request can go out early.
+- Movies and collections are not covered.
+
 ### Cleanup Automation
 
 Cleanup Automation is available under **Advanced -> Cleanup Automation**.

@@ -456,6 +456,26 @@ class SchemaManager:
                     UNIQUE (media_user_identity_id, tmdb_id, media_type)
                 )
             """,
+            # Next-season follow-up: furthest episode watched per show, per media server.
+            'season_followups': """
+                CREATE TABLE IF NOT EXISTS season_followups (
+                    server_key CHAR(64) NOT NULL,
+                    tmdb_id INTEGER NOT NULL,
+                    season INTEGER NOT NULL,
+                    episode INTEGER NOT NULL,
+                    last_watched_at TIMESTAMP NULL,
+                    requested_season INTEGER NULL,
+                    updated_at TIMESTAMP NULL,
+                    PRIMARY KEY (server_key, tmdb_id)
+                )
+            """,
+            # Watermark of the follow-up history scan, per media server.
+            'season_followup_scans': """
+                CREATE TABLE IF NOT EXISTS season_followup_scans (
+                    server_key CHAR(64) NOT NULL PRIMARY KEY,
+                    scanned_through TIMESTAMP NULL
+                )
+            """,
             'rating_prompts': """
                 CREATE TABLE IF NOT EXISTS rating_prompts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

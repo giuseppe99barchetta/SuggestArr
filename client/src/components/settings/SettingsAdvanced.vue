@@ -448,6 +448,33 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Checked every 15 minutes for tracked SuggestArr requests. Deleted requests and automatic expiry declines do not trigger alternatives. Disabled or paused jobs wait.</p>
         </SectionCard>
 
+        <SectionCard icon="fas fa-forward" title="Next-season follow-up" description="Request the next season when people on your media server near the end of the current one." class="xl:col-span-2">
+          <BaseCheckbox v-model="localConfig.SEASON_FOLLOWUP_ENABLED" label="Request the next season automatically" description="Off by default. Also requests newly announced seasons for shows people have caught up on." :disabled="isLoading" />
+          <div class="mt-3 grid gap-2.5 md:grid-cols-2">
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5" :class="{ 'opacity-50': !localConfig.SEASON_FOLLOWUP_ENABLED }">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Episodes before the end</span>
+                <span class="text-xs leading-snug text-ink-4">Request when this many episodes remain (0 to 100). 0 waits for the season finale.</span>
+              </span>
+              <input v-model.number="localConfig.SEASON_FOLLOWUP_EPISODES_BEFORE_END" aria-label="Episodes before the end of the season" type="number" min="0" max="100" step="1" class="ui-input h-9 w-20 shrink-0 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.SEASON_FOLLOWUP_ENABLED" />
+            </label>
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5" :class="{ 'opacity-50': !localConfig.SEASON_FOLLOWUP_ENABLED }">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Ignore shows not watched for</span>
+                <span class="text-xs leading-snug text-ink-4">Days, from 1 to 3650.</span>
+              </span>
+              <span class="flex shrink-0 items-center gap-2 text-[0.8125rem] text-ink-3">
+                <input v-model.number="localConfig.SEASON_FOLLOWUP_WINDOW_DAYS" aria-label="Ignore shows not watched for (days)" type="number" min="1" max="3650" step="1" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.SEASON_FOLLOWUP_ENABLED" />days
+              </span>
+            </label>
+          </div>
+          <div class="mt-2.5 flex min-h-20 items-center rounded-ctl border border-edge bg-panel-2 p-3.5" :class="{ 'opacity-50': !localConfig.SEASON_FOLLOWUP_ENABLED }">
+            <BaseCheckbox v-model="localConfig.SEASON_FOLLOWUP_ONLY_SUGGESTARR" label="Only shows SuggestArr requested" description="Leave out shows that were added some other way." class="w-full" :disabled="isLoading || !localConfig.SEASON_FOLLOWUP_ENABLED" />
+          </div>
+          <SeasonFollowupControls :enabled="originalConfig.SEASON_FOLLOWUP_ENABLED" :disabled="isLoading || hasChanges" />
+          <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Runs every 6 hours and reads the watch history of all accounts on your media server. Requests go out as the configured Seer user, or straight to Sonarr.</p>
+        </SectionCard>
+
         <SectionCard icon="fas fa-eye" title="Who sees what" description="Choose request visibility and the default title language." class="xl:col-span-2">
           <fieldset class="m-0 min-w-0 border-0 p-0">
             <legend class="mb-2 p-0 text-[0.8125rem] font-semibold text-ink-2">Request visibility</legend>
@@ -505,6 +532,7 @@ import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
 import RequestExpiryControls from './RequestExpiryControls.vue';
 import RequestReplacementControls from './RequestReplacementControls.vue';
+import SeasonFollowupControls from './SeasonFollowupControls.vue';
 
 export default {
   name: 'SettingsAdvanced',
@@ -513,6 +541,7 @@ export default {
     BaseCheckbox,
     RequestExpiryControls,
     RequestReplacementControls,
+    SeasonFollowupControls,
   },
   props: {
     // Which part of the former Advanced page to show: 'ai', 'workflow' or 'system'.
@@ -640,6 +669,10 @@ export default {
           SEER_AUTO_DECLINE_DAYS: 0,
           SEER_AUTO_DECLINE_DRY_RUN: true,
           REPLACE_REJECTED_REQUESTS: false,
+          SEASON_FOLLOWUP_ENABLED: false,
+          SEASON_FOLLOWUP_EPISODES_BEFORE_END: 2,
+          SEASON_FOLLOWUP_WINDOW_DAYS: 180,
+          SEASON_FOLLOWUP_ONLY_SUGGESTARR: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
@@ -805,6 +838,12 @@ export default {
         this.$toast.error('Seerr auto-decline days must be an integer between 0 and 365.');
         return;
       }
+      const followupEpisodes = this.localConfig.SEASON_FOLLOWUP_EPISODES_BEFORE_END;
+      const followupDays = this.localConfig.SEASON_FOLLOWUP_WINDOW_DAYS;
+      if (!Number.isInteger(followupEpisodes) || followupEpisodes < 0 || followupEpisodes > 100 || !Number.isInteger(followupDays) || followupDays < 1 || followupDays > 3650) {
+        this.$toast.error('Season follow-up needs episodes before the end between 0 and 100 and a window between 1 and 3650 days.');
+        return;
+      }
       const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
       const temperatureText = String(this.localConfig.LLM_TEMPERATURE ?? '').trim();
       const temperature = temperatureText.toLowerCase() === 'legacy' ? 'legacy' : temperatureText;
@@ -847,6 +886,10 @@ export default {
             SEER_AUTO_DECLINE_DAYS: this.localConfig.SEER_AUTO_DECLINE_DAYS,
             SEER_AUTO_DECLINE_DRY_RUN: this.localConfig.SEER_AUTO_DECLINE_DRY_RUN,
             REPLACE_REJECTED_REQUESTS: this.localConfig.REPLACE_REJECTED_REQUESTS === true,
+            SEASON_FOLLOWUP_ENABLED: this.localConfig.SEASON_FOLLOWUP_ENABLED === true,
+            SEASON_FOLLOWUP_EPISODES_BEFORE_END: followupEpisodes,
+            SEASON_FOLLOWUP_WINDOW_DAYS: followupDays,
+            SEASON_FOLLOWUP_ONLY_SUGGESTARR: this.localConfig.SEASON_FOLLOWUP_ONLY_SUGGESTARR === true,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',

@@ -257,6 +257,10 @@ def get_default_values():
         'SEER_AUTO_DECLINE_DAYS': lambda: 0,
         'SEER_AUTO_DECLINE_DRY_RUN': lambda: True,
         'REPLACE_REJECTED_REQUESTS': lambda: False,
+        'SEASON_FOLLOWUP_ENABLED': lambda: False,
+        'SEASON_FOLLOWUP_EPISODES_BEFORE_END': lambda: 2,
+        'SEASON_FOLLOWUP_WINDOW_DAYS': lambda: 180,
+        'SEASON_FOLLOWUP_ONLY_SUGGESTARR': lambda: False,
         # Database connection pool settings
         'DB_MIN_CONNECTIONS': lambda: '2',
         'DB_MAX_CONNECTIONS': lambda: '10',
@@ -296,6 +300,22 @@ def validate_seer_expiry_settings(config_data):
     if not isinstance(config_data.get('REPLACE_REJECTED_REQUESTS', False), bool):
         raise ValueError('REPLACE_REJECTED_REQUESTS must be a boolean')
 
+
+
+def validate_season_followup_settings(config_data):
+    """Reject invalid next-season follow-up settings.
+
+    :raises ValueError: With a user-facing message when a value is out of range.
+    """
+    for key in ('SEASON_FOLLOWUP_ENABLED', 'SEASON_FOLLOWUP_ONLY_SUGGESTARR'):
+        if not isinstance(config_data.get(key, False), bool):
+            raise ValueError(f'{key} must be a boolean')
+    episodes = config_data.get('SEASON_FOLLOWUP_EPISODES_BEFORE_END', 2)
+    if type(episodes) is not int or not 0 <= episodes <= 100:
+        raise ValueError('SEASON_FOLLOWUP_EPISODES_BEFORE_END must be an integer between 0 and 100')
+    days = config_data.get('SEASON_FOLLOWUP_WINDOW_DAYS', 180)
+    if type(days) is not int or not 1 <= days <= 3650:
+        raise ValueError('SEASON_FOLLOWUP_WINDOW_DAYS must be an integer between 1 and 3650')
 
 REQUEST_BACKENDS = ('seer', 'arr', 'both')
 # Keys whose change can invalidate the active request backend's prerequisites.
@@ -377,6 +397,7 @@ def save_env_vars(config_data):
     Also validates cron times and updates them if needed.
     """
     validate_seer_expiry_settings(config_data)
+    validate_season_followup_settings(config_data)
     # Keys missing from the payload are stored as their defaults, so validate that effective view.
     validate_request_backend({**get_config_values(), **config_data}, load_env_vars())
     from api_service.utils.ssrf_guard import normalize_base_url
@@ -471,6 +492,8 @@ def get_config_sections():
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
                      'SEER_AUTO_DECLINE_DAYS', 'SEER_AUTO_DECLINE_DRY_RUN',
                      'REPLACE_REJECTED_REQUESTS',
+                     'SEASON_FOLLOWUP_ENABLED', 'SEASON_FOLLOWUP_EPISODES_BEFORE_END',
+                     'SEASON_FOLLOWUP_WINDOW_DAYS', 'SEASON_FOLLOWUP_ONLY_SUGGESTARR',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
                      'SUBPATH', 'ALLOW_REGISTRATION', 'REGISTRATION_DEFAULT_TABS',

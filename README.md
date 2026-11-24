@@ -21,6 +21,7 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Public list import** from MDBList or Trakt, as a scheduled job or a single import.
 - **Request control**: optional approval before anything is requested, pause jobs while requests or downloads are still pending or suggestions are still unwatched, auto-decline stale Seerr requests (Seer only).
 - **Cleanup automation**: remove old SuggestArr requests that nobody added to favorites, with their media files, through Seer or in Radarr and Sonarr (off and dry-run by default).
+- **Next-season follow-up**: optionally request the next season of a show when people on your media server near the end of the current one (off by default, [details](docs/FEATURES.md#next-season-follow-up)).
 - **Filters**: skip content already on streaming services in your country, plus quality and per-user filters.
 - **Web interface** for setup, scheduling, users, requests and live logs, with connection tests during setup.
 - **Recaps and milestones** you can share ([details](docs/RECAP.md)).

@@ -247,6 +247,34 @@ class TMDbClient(BaseHTTPClient):
             self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e).replace(self.api_key, "***"))
         return None
     
+    async def get_tv_seasons(self, tmdb_id):
+        """Return a show's TVDB id and the episode count of each regular season.
+
+        :param tmdb_id: TMDb id of the show.
+        :return: ``{'tvdb_id': int | None, 'seasons': {season_number: episode_count}}`` (specials,
+            season 0, are left out; an unknown count is None), or None when TMDb did not answer.
+        """
+        url = f"{self.tmdb_api_url}/tv/{int(tmdb_id)}?api_key={self.api_key}&append_to_response=external_ids"
+        try:
+            session = await self._get_session()
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
+                if response.status not in HTTP_OK:
+                    self.logger.warning("TMDb returned %d for the seasons of tv:%s", response.status, tmdb_id)
+                    return None
+                data = await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            self.logger.error("Could not fetch the seasons of tv:%s: %s", tmdb_id,
+                              str(e).replace(self.api_key, "***"))
+            return None
+        seasons = {}
+        for season in data.get('seasons') or []:
+            number = season.get('season_number')
+            if isinstance(number, int) and number > 0:
+                count = season.get('episode_count')
+                seasons[number] = count if isinstance(count, int) else None
+        tvdb_id = (data.get('external_ids') or {}).get('tvdb_id')
+        return {'tvdb_id': tvdb_id if isinstance(tvdb_id, int) else None, 'seasons': seasons}
+
     async def get_metadata(self, tmdb_id, content_type):
         """
         Fetch metadata for a movie or TV show by its TMDb ID.
