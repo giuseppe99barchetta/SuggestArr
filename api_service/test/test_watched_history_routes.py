@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -154,3 +155,38 @@ def test_patch_unknown_title_returns_404():
     with p1, p2:
         response = make_app().test_client().patch('/api/watched-history/me/99', json={'excluded': False})
     assert response.status_code == 404
+
+
+def _search_client():
+    # TMDb's /search/movie and /search/tv results carry no media_type (only /search/multi does).
+    client = MagicMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.search_movie = AsyncMock(return_value=[
+        {'id': 1, 'title': 'Arrival', 'release_date': '2016-11-11'},
+    ])
+    client.search_tv = AsyncMock(return_value=[
+        {'id': 2, 'name': 'Colin from Accounts', 'first_air_date': '2022-01-01'},
+    ])
+    return client
+
+
+def _search(media_type):
+    with patch('api_service.blueprints.watched_history.routes.ConfigService.get_runtime_config',
+               return_value={'TMDB_API_KEY': 'key'}), \
+            patch('api_service.blueprints.watched_history.routes.TMDbClient', return_value=_search_client()):
+        return asyncio.run(routes._search_tmdb('query', media_type))
+
+
+def test_search_tags_movie_results_with_movie_type():
+    assert [(r['tmdb_id'], r['media_type']) for r in _search('movie')] == [('1', 'movie')]
+
+
+def test_search_tags_tv_results_with_tv_type():
+    assert [(r['tmdb_id'], r['media_type']) for r in _search('tv')] == [('2', 'tv')]
+
+
+def test_search_tags_each_result_with_the_search_it_came_from_for_both():
+    assert [(r['tmdb_id'], r['media_type'], r['year']) for r in _search('both')] == [
+        ('1', 'movie', '2016'), ('2', 'tv', '2022'),
+    ]
