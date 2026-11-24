@@ -157,24 +157,52 @@ def test_patch_unknown_title_returns_404():
     assert response.status_code == 404
 
 
-def _search_client():
-    # TMDb's /search/movie and /search/tv results carry no media_type (only /search/multi does).
-    client = MagicMock()
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
-    client.search_movie = AsyncMock(return_value=[
-        {'id': 1, 'title': 'Arrival', 'release_date': '2016-11-11'},
-    ])
-    client.search_tv = AsyncMock(return_value=[
-        {'id': 2, 'name': 'Colin from Accounts', 'first_air_date': '2022-01-01'},
-    ])
-    return client
+# Raw TMDb payloads: /search/movie and /search/tv results carry no media_type (only /search/multi does).
+_TMDB_SEARCH = {
+    '/search/movie': {'results': [{'id': 1, 'title': 'Arrival', 'release_date': '2016-11-11'}]},
+    '/search/tv': {'results': [{'id': 2, 'name': 'Colin from Accounts', 'first_air_date': '2022-01-01'}]},
+}
+
+
+class _FakeResponse:
+    status = 200
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def json(self):
+        return self._payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    """Stands in for aiohttp only, so the real TMDbClient search and formatting run."""
+    closed = False
+
+    def get(self, url, **kwargs):
+        return _FakeResponse(next(body for path, body in _TMDB_SEARCH.items() if path in url))
+
+    async def close(self):
+        self.closed = True
+
+
+def _tmdb_patches():
+    return (
+        patch('api_service.blueprints.watched_history.routes.ConfigService.get_runtime_config',
+              return_value={'SELECTED_SERVICE': 'jellyfin', 'TMDB_API_KEY': 'key'}),
+        patch('api_service.services.tmdb.tmdb_client.TMDbClient._get_session',
+              new=AsyncMock(side_effect=lambda: _FakeSession())),
+    )
 
 
 def _search(media_type):
-    with patch('api_service.blueprints.watched_history.routes.ConfigService.get_runtime_config',
-               return_value={'TMDB_API_KEY': 'key'}), \
-            patch('api_service.blueprints.watched_history.routes.TMDbClient', return_value=_search_client()):
+    p1, p2 = _tmdb_patches()
+    with p1, p2:
         return asyncio.run(routes._search_tmdb('query', media_type))
 
 
@@ -189,4 +217,24 @@ def test_search_tags_tv_results_with_tv_type():
 def test_search_tags_each_result_with_the_search_it_came_from_for_both():
     assert [(r['tmdb_id'], r['media_type'], r['year']) for r in _search('both')] == [
         ('1', 'movie', '2016'), ('2', 'tv', '2022'),
+    ]
+
+
+def test_searched_tv_show_can_be_added_to_watch_history(tmp_path):
+    import api_service.db.database_manager as dm_mod
+    dm_mod.DatabaseManager._instance = None
+    p1, p2 = _tmdb_patches()
+    try:
+        with p1, p2, patch.object(dm_mod, 'DB_PATH', str(tmp_path / 'test.db')),                 patch('api_service.db.database_manager.load_env_vars', return_value={'DB_TYPE': 'sqlite'}):
+            client = make_app('admin').test_client()
+            search = client.get('/api/watched-history/me/search?query=colin&media_type=tv')
+            picked = search.get_json()['results'][0]
+            added = client.post('/api/watched-history/me?user=jf-1', json={**picked, 'rating': 8})
+            db = dm_mod.DatabaseManager()
+            stored = db.list_watched_media(db.upsert_media_user_identity('jellyfin', 'jf-1')['id'])
+    finally:
+        dm_mod.DatabaseManager._instance = None
+    assert added.status_code == 201, added.get_json()
+    assert [(row['tmdb_id'], row['media_type'], row['title'], row['year'], row['rating']) for row in stored] == [
+        ('2', 'tv', 'Colin from Accounts', 2022, 8.0),
     ]
