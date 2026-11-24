@@ -203,16 +203,18 @@ async def _search_tmdb(query: str, media_type: str):
         return None
     client = TMDbClient(api_key, 10, 0, 0, True, 0, [], [], None, [])
     async with client:
-        functions = []
+        # /search/movie and /search/tv results carry no media_type, so tag each with the search it came from.
+        searches = []
         if media_type in {'movie', 'both'}:
-            functions.append(client.search_movie(query))
+            searches.append(('movie', client.search_movie(query)))
         if media_type in {'tv', 'both'}:
-            functions.append(client.search_tv(query))
+            searches.append(('tv', client.search_tv(query)))
+        groups = await asyncio.gather(*(call for _, call in searches))
         results = []
-        for group in await asyncio.gather(*functions):
-            results.extend(group or [])
+        for (kind, _), group in zip(searches, groups):
+            results.extend({**item, 'media_type': kind} for item in group or [])
         return [{
-            'tmdb_id': str(item.get('id')), 'media_type': item.get('media_type'),
+            'tmdb_id': str(item.get('id')), 'media_type': item['media_type'],
             'title': item.get('title') or item.get('name'),
             'year': str(item.get('release_date') or item.get('first_air_date') or '')[:4] or None,
         } for item in results if item.get('id') and (item.get('title') or item.get('name'))]
