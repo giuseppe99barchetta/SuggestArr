@@ -317,11 +317,14 @@ def validate_season_followup_settings(config_data):
     if type(days) is not int or not 1 <= days <= 3650:
         raise ValueError('SEASON_FOLLOWUP_WINDOW_DAYS must be an integer between 1 and 3650')
 
-REQUEST_BACKENDS = ('seer', 'arr', 'both')
+REQUEST_BACKENDS = ('seer', 'arr', 'both', 'plex_watchlist')
 # Keys whose change can invalidate the active request backend's prerequisites.
 _SEER_PREREQ_KEYS = ('SEER_API_URL', 'SEER_TOKEN')
 _ARR_PREREQ_KEYS = ('RADARR_API_URL', 'RADARR_TOKEN', 'SONARR_API_URL', 'SONARR_TOKEN', 'ARR_PROFILE_CONFIG')
-_BACKEND_PREREQ_KEYS = {'seer': _SEER_PREREQ_KEYS, 'arr': _ARR_PREREQ_KEYS, 'both': _SEER_PREREQ_KEYS + _ARR_PREREQ_KEYS}
+_PLEX_WATCHLIST_PREREQ_KEYS = ('PLEX_TOKEN',)
+_BACKEND_PREREQ_KEYS = {'seer': _SEER_PREREQ_KEYS, 'arr': _ARR_PREREQ_KEYS,
+                        'both': _SEER_PREREQ_KEYS + _ARR_PREREQ_KEYS,
+                        'plex_watchlist': _PLEX_WATCHLIST_PREREQ_KEYS}
 # service -> (URL key, token key, media type it serves)
 ARR_INSTANCES = {'radarr': ('RADARR_API_URL', 'RADARR_TOKEN', 'movie'),
                  'sonarr': ('SONARR_API_URL', 'SONARR_TOKEN', 'tv')}
@@ -368,6 +371,11 @@ def validate_request_backend(new_config, current_config=None):
     if not (explicit or prereq_changed):
         return
 
+    if backend == 'plex_watchlist':
+        # The watchlist belongs to the Plex account, so the account token is all it needs.
+        if not new_config.get('PLEX_TOKEN'):
+            raise ValueError('A Plex token is required to deliver to the Plex watchlist.')
+        return
     if backend in ('seer', 'both') and not (new_config.get('SEER_API_URL') and new_config.get('SEER_TOKEN')):
         raise ValueError('Seer URL and API key are required for this request backend.')
     if backend == 'seer':

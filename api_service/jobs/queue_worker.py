@@ -16,6 +16,7 @@ from api_service.exceptions.api_exceptions import is_transport_error
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.arr.arr_request_client import ArrRequestClient
+from api_service.services.plex.watchlist_client import PlexWatchlistClient
 from api_service.services.seer.seer_client import SeerClient, normalize_seer_url, parse_seer_timestamp
 from api_service.utils.asyncio_loop import close_event_loop
 from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
@@ -175,6 +176,9 @@ async def _run_worker() -> int:
                 if backend == 'arr':
                     client = ArrRequestClient(env, env.get('FILTER_NUM_SEASONS') or 'all', False, False,
                                               env.get('REQUEST_FIRST_SEASON_ONLY', False))
+                elif backend == 'plex_watchlist':
+                    client = PlexWatchlistClient(env, env.get('FILTER_NUM_SEASONS') or 'all', False, False,
+                                                 env.get('REQUEST_FIRST_SEASON_ONLY', False))
                 else:
                     client = SeerClient(
                         env.get('SEER_API_URL', ''),

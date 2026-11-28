@@ -11,7 +11,7 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and requests them through **Seer** or straight to **Radarr** and **Sonarr**.
+SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and requests them through **Seer**, straight to **Radarr** and **Sonarr**, or onto your **Plex watchlist** without downloading anything.
 
 ## Features
 
@@ -19,6 +19,7 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Recommendations** from TMDb, or from any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) with a short reason for each pick.
 - **AI Search**: describe what you want to watch in plain language and request results in one click.
 - **Public list import** from MDBList or Trakt, as a scheduled job or a single import.
+- **Plex watchlist delivery**: add picks to your Plex account's watchlist instead of downloading them, so they show up on every client and server signed into the account. Needs no Seer, Radarr or Sonarr ([details](docs/FEATURES.md#plex-watchlist-delivery)).
 - **Request control**: optional approval before anything is requested, pause jobs while requests or downloads are still pending or suggestions are still unwatched, auto-decline stale Seerr requests (Seer only).
 - **Cleanup automation**: remove old SuggestArr requests that nobody added to favorites, with their media files, through Seer or in Radarr and Sonarr (off and dry-run by default).
 - **Next-season follow-up**: optionally request the next season of a show when people on your media server near the end of the current one (off by default, [details](docs/FEATURES.md#next-season-follow-up)).

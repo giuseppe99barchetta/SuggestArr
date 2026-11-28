@@ -3,6 +3,7 @@
 Detailed behaviour of SuggestArr features. For setup, see the [Installation Guide](INSTALLATION.md).
 
 - [Request approval workflow](#request-approval-workflow)
+- [Plex watchlist delivery](#plex-watchlist-delivery)
 - [Using a specific Seer user for requests](#using-a-specific-seer-user-for-requests)
 - [Public list import](#public-list-import)
 - [Trakt watch history](#trakt-watch-history-integration)
@@ -23,6 +24,36 @@ at a time), not only the cards loaded on screen.
 The global Request Workflow settings can also pause a job while its SuggestArr
 suggestions await review and automatically reject suggestions left pending for a
 configured number of days. The pause behavior can be overridden per job.
+
+## Plex watchlist delivery
+
+Under **Connections → Where requests go**, choosing **Plex watchlist** stops SuggestArr
+downloading anything. Each pick is added to the watchlist of the Plex account whose token
+is configured, and nothing is sent to Seer, Radarr or Sonarr.
+
+The watchlist belongs to the Plex *account*, not to one server, so a watchlisted title
+appears on every client and every server signed into that account, whether or not any of
+them holds the file. It is a useful way to let suggestions accumulate somewhere visible
+when disk space is short, or when the title can already be streamed from somewhere else.
+
+**Setup.** Select **Plex watchlist** and save. The only prerequisite is a Plex token, which
+is already configured when Plex is the watch-history source. Seer, Radarr and Sonarr
+become optional: Radarr and Sonarr stay available under **Optional extras**, where they
+only report what you already own so suggestions can skip it.
+
+**How titles are matched.** Each suggestion is mapped from its TMDb id onto Plex's own
+metadata id through Plex Discover, by id rather than by title: a title search is fuzzy
+enough to return sequels and unrelated films, while the id is exact. A title Plex does not
+know cannot be watchlisted and is reported as such in the logs. Adding a title that is
+already on the watchlist does nothing, so a retried delivery never duplicates an entry.
+
+**Request approval** works exactly as it does for the other backends: with approval
+enabled, suggestions wait on the Requests page and reach the watchlist only once approved.
+
+> [!NOTE]
+> If you have enabled Seer's own **Auto-Request from Watchlist** sync, anything SuggestArr
+> adds to the watchlist will be picked up by Seer and requested as a download, which
+> defeats the purpose of this backend. Turn that sync off, or use a different backend.
 
 ## Using a Specific Seer User for Requests
 If you'd like to use a specific Seer user to make media requests, follow these steps:

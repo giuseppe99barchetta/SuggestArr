@@ -13,16 +13,16 @@
         <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Required</h2>
         <div :class="listClass">
           <MediaServerCard v-if="showSection('media-server')" />
-          <SeerCard v-if="showSection('seer') && (wizardMode || requestBackend !== 'arr')" />
-          <ArrCard v-if="showSection('arr') && (wizardMode || requestBackend !== 'seer')" />
+          <SeerCard v-if="showSection('seer') && (wizardMode || deliversToSeer)" />
+          <ArrCard v-if="showSection('arr') && (wizardMode || deliversToArr)" />
           <TmdbCard v-if="showSection('tmdb')" />
         </div>
       </section>
 
-      <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist')) || (!wizardMode && requestBackend === 'seer')" :class="wizardMode ? '' : 'flex flex-col gap-2'">
+      <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist')) || (!wizardMode && !deliversToArr)" :class="wizardMode ? '' : 'flex flex-col gap-2'">
         <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h2>
         <div :class="listClass">
-          <ArrCard v-if="!wizardMode && requestBackend === 'seer'" />
+          <ArrCard v-if="!wizardMode && !deliversToArr" />
           <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
           <OmdbCard v-if="showSection('omdb')" />
           <TraktCard v-if="showSection('trakt')" />
@@ -106,6 +106,17 @@ export default {
     },
     requestBackend() {
       return this.localConfig.REQUEST_BACKEND || 'seer';
+    },
+    /** Whether requests are delivered through Seer; otherwise its card is not required. */
+    deliversToSeer() {
+      return ['seer', 'both'].includes(this.requestBackend);
+    },
+    /**
+     * Whether requests are delivered straight to Radarr/Sonarr. When they are not, those
+     * instances are still useful as a library check, so their card moves to Optional extras.
+     */
+    deliversToArr() {
+      return ['arr', 'both'].includes(this.requestBackend);
     },
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
