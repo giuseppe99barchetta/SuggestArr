@@ -3,17 +3,23 @@ from api_service.services.arr.arr_request_client import ArrRequestClient
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
+from api_service.services.plex.watchlist_client import PlexWatchlistClient
 
 def build_request_client(env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
                          request_first_season_only, queue_context=None):
     """Return the client requests are enqueued with, per ``REQUEST_BACKEND``.
 
     ``seer`` and ``both`` use Seer (Radarr/Sonarr then only feed the library check);
-    ``arr`` delivers straight to Radarr/Sonarr.
+    ``arr`` delivers straight to Radarr/Sonarr; ``plex_watchlist`` downloads nothing and
+    adds the title to the Plex account's watchlist instead.
     """
-    if get_request_backend(env_vars) == 'arr':
+    backend = get_request_backend(env_vars)
+    if backend == 'arr':
         return ArrRequestClient(env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
                                 request_first_season_only, queue_context=queue_context)
+    if backend == 'plex_watchlist':
+        return PlexWatchlistClient(env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
+                                   request_first_season_only, queue_context=queue_context)
     anime_profile_config = env_vars.get('SEER_ANIME_PROFILE_CONFIG')
     return SeerClient(
         env_vars['SEER_API_URL'], env_vars['SEER_TOKEN'], env_vars['SEER_USER_NAME'],

@@ -124,6 +124,26 @@ test('Connections: "Both" keeps Seer required and offers no profile pickers', as
   expect(errors).toEqual([]);
 });
 
+test('Connections: the Plex watchlist needs neither Seer nor Radarr & Sonarr', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1200, height: 1000 });
+  const errors = await services(page, BASE);
+  const choice = page.getByTestId('request-backend-choice');
+  await choice.getByRole('radio', { name: /Plex watchlist/ }).click();
+  await expect(choice.getByRole('radio', { name: /Plex watchlist/ })).toHaveAttribute('aria-checked', 'true');
+
+  // Nothing is downloaded, so neither delivery target is required any more.
+  await expect(page.getByText('Jellyseerr / Overseerr', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('radarr-profiles')).toHaveCount(0);
+  // Radarr and Sonarr remain available, but only as a library check.
+  await expect(page.getByText('Optional extras')).toBeVisible();
+  await expect(page.getByTestId('arr-connection').getByText('Skip titles already in your Radarr or Sonarr')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('connections-plex-watchlist.png'), fullPage: true });
+
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  expect((await page.evaluate(() => window.events))[0].data.REQUEST_BACKEND).toBe('plex_watchlist');
+  expect(errors).toEqual([]);
+});
+
 test('Connections: with Seer only, Radarr & Sonarr is an optional extra for the library check', async ({ page }) => {
   await services(page, BASE);
   await expect(page.getByText('Optional extras')).toBeVisible();

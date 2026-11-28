@@ -1,5 +1,5 @@
 <template>
-  <div data-testid="request-backend-choice" role="radiogroup" aria-label="Request backend" class="grid grid-cols-1 gap-3 md:grid-cols-3">
+  <div data-testid="request-backend-choice" role="radiogroup" aria-label="Request backend" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
     <button
       v-for="option in options"
       :key="option.value"
@@ -22,8 +22,9 @@
 
 <script>
 /**
- * Picks where requests are delivered: Seer, straight to Radarr/Sonarr, or both
- * (Seer requests, Radarr/Sonarr as an extra library check).
+ * Picks where requests are delivered: Seer, straight to Radarr/Sonarr, both
+ * (Seer requests, Radarr/Sonarr as an extra library check), or the Plex account's
+ * watchlist, which downloads nothing at all.
  * Works with `v-model` (dashboard) and with the setup wizard's `config` + `update-config` pair.
  */
 export const REQUEST_BACKENDS = [
@@ -33,6 +34,8 @@ export const REQUEST_BACKENDS = [
     description: 'Titles are added straight to Radarr and Sonarr, tagged suggestarr. No Seer needed; only auto-decline of pending Seer requests is not available.' },
   { value: 'both', label: 'Both', icon: 'fas fa-layer-group',
     description: 'Seer keeps handling requests; Radarr and Sonarr also tell SuggestArr what you already own.' },
+  { value: 'plex_watchlist', label: 'Plex watchlist', icon: 'fas fa-bookmark',
+    description: 'Nothing is downloaded. Titles are added to your Plex account watchlist, so they appear on every client and server signed into it. Needs no Seer, Radarr or Sonarr.' },
 ];
 
 export default {
